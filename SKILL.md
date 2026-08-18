@@ -198,7 +198,7 @@ files, the card must stand alone.
 | **Why** | Why this file had to change for the PR’s goal. |
 | **Links** | How it connects to files already covered and to upcoming files in the queue. |
 | **Look closer** | 0–3 **named** functions/methods that are complex or novel. Understand this. One line each: name + why (new protocol, dense control flow, non-obvious invariant, first of its kind here). If none, say “none”. Not thin wrappers, re-exports, or routine CRUD. |
-| **Could have** | 0–2 **design forks** on this file only when there was a real choice (API shape, layer, library, sync vs async, where pagination lives). One line each: plausible alternative + short tradeoff vs what they shipped. If the file is obvious or there's no fork, say “none”. Not a teach-back requirement — counterfactual review, not “you should have done X.” |
+| **Could have** | 0–2 **design forks** on this file only when there was a real choice (API shape, layer, library, sync vs async, where pagination lives), and when the code or surrounding context gives evidence that this was an intentional design choice. One line each: plausible alternative + short tradeoff vs what they shipped. If the file is obvious or there's no fork, say “none”. Not a teach-back requirement — counterfactual review, not “you should have done X.” |
 | **Uh oh** | 0–3 watch-outs: bugs, missing tests, risky edges, surprising coupling. Might be wrong. If none, say “none”. Do not invent. |
 
 Look closer, Could have, and Uh oh are different buckets. The same
