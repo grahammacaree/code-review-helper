@@ -29,8 +29,9 @@ Copy the output shapes from [templates.md](templates.md).
 3. Opening turn: robust overview (what / why / dependencies /
    connections) + ordered file queue. Stop. Do not start file 1 until
    they say go / start.
-4. One file card per turn (what / why / links / look closer / uh oh).
-   Open that file in the editor. Huge generated files: hunks only.
+4. One file card per turn (what / why / links / look closer / could have /
+   uh oh). Open that file in the editor when the host allows. Huge
+   generated files: hunks only.
 5. Teach-back gate: do not advance until they explain the file in their
    own words. Side questions are allowed; do not make them recap a file
    they already explained.
@@ -55,8 +56,8 @@ branch to offer back at the end.
      `git checkout -B pr-<n> FETCH_HEAD`. Only `-B` that dedicated
      `pr-<n>` branch — never `-B` `main` / `master` / their current
      feature branch.
-3. Confirm `HEAD` matches the PR tip. Then `SetActiveBranch` to the
-   checkout name if that tool exists.
+3. Confirm `HEAD` matches the PR tip. If the host exposes active-branch
+   metadata (e.g. Cursor `SetActiveBranch`), set it to the checkout name.
 4. Branch-name or “current branch vs base” reviews: still require a
    clean tree. If they are already on the branch to review and it
    matches, skip the extra checkout.
@@ -179,15 +180,17 @@ against the PR merge-base.
 - **New:** whole file is in play. Open at a sensible start (`#L1` or the
   export/handler).
 - **Modified:** list **Focus** as the changed line ranges (from diff
-  hunks, coalesced). Open with
-  `file:///abs/path#L<first>-L<last>` for the primary hunk. Cursor may
-  only jump, not paint a highlight — still land them on the change.
+  hunks, coalesced). Jump to
+  `file:///abs/path#L<first>-L<last>` when the host can open files at a
+  line (e.g. Cursor `open_resource`; otherwise give path + range in the
+  card). Many hosts jump but cannot highlight a selection.
 - **Deleted:** do not open; say it was removed and show the old path.
 - **Renamed:** say old → new, then treat as modified (or new, if the
   body is a rewrite).
 
-Open the file in the editor with `open_resource` **before** the card
-text so they can read it beside you.
+Open the current file beside the chat **before** the card when possible
+(host file-open tool, or path + focus lines). If the host cannot open
+files, the card must stand alone.
 
 | Section | Content |
 |---|---|
@@ -195,15 +198,18 @@ text so they can read it beside you.
 | **Why** | Why this file had to change for the PR’s goal. |
 | **Links** | How it connects to files already covered and to upcoming files in the queue. |
 | **Look closer** | 0–3 **named** functions/methods that are complex or novel. Understand this. One line each: name + why (new protocol, dense control flow, non-obvious invariant, first of its kind here). If none, say “none”. Not thin wrappers, re-exports, or routine CRUD. |
+| **Could have** | 0–2 **design forks** on this file only when there was a real choice (API shape, layer, library, sync vs async, where pagination lives). One line each: plausible alternative + short tradeoff vs what they shipped. If the file is obvious or there's no fork, say “none”. Not a teach-back requirement — counterfactual review, not “you should have done X.” |
 | **Uh oh** | 0–3 watch-outs: bugs, missing tests, risky edges, surprising coupling. Might be wrong. If none, say “none”. Do not invent. |
 
-Look closer and Uh oh are different buckets. The same function may appear
-in both; do not copy Look closer prose into Uh oh.
+Look closer, Could have, and Uh oh are different buckets. The same
+function may appear in Look closer and Uh oh; Could have is about
+choices, not defects.
 
-For huge generated files: hunks only (see Opening turn). Do not
-`open_resource` a 10k-line swagger/lockfile.
+For huge generated files: hunks only (see Opening turn). Do not open a
+10k-line swagger/lockfile whole.
 
-If **Look closer** is not none, jump the editor to the first named function (`#L<start>`) as well as the file’s focus range.
+If **Look closer** is not none and the host can open files, jump to the
+first named function (`#L<start>`) as well as the file’s focus range.
 
 End every file turn with the teach-back prompt from [templates.md](templates.md). If Look closer named functions, the prompt must ask about those **by name**. Do not advance until they can explain what those functions do, not only the file’s job.
 
@@ -235,9 +241,10 @@ recited the card.
 ## Wrap-up (final teach-back)
 
 After the last file, do **not** restate the opening overview. Give
-lingering uh-ohs (compact, evidence-backed, or “none”), then ask them to
-summarise the PR in their own words: what it does, why, how the files and
-dependencies connect.
+lingering uh-ohs (compact, evidence-backed, or “none”). If any file had
+a non-none **Could have**, add a short **Design forks** list (file +
+fork in one line each). Then ask them to summarise the PR in their own
+words: what it does, why, how the files and dependencies connect.
 
 If the summary is thin or wrong: same gate as a file — one short
 correction, stay here. When it’s good enough: one-line confirm, offer to
@@ -264,5 +271,7 @@ confusion.
   tree, then checkout).
 - Do not confuse this skill with an automated defect hunt.
 - Do not invent uh-ohs to look thorough.
+- Do not invent Could have alternatives on obvious or thin files.
 - Do not treat Look closer as Uh oh (or flag every new function).
+- Do not require teach-back on Could have (optional counterfactual).
 - Do not post GitHub comments unless asked.

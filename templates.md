@@ -75,6 +75,8 @@ until then.
 
 **Look closer:** [`parseNextCursorFromLinkHeader` — [why to understand it]] or **none**
 
+**Could have:** [0–2 design forks: alternative + tradeoff vs what shipped, or **none**]
+
 **Uh oh:** [0–3 might-be-wrong watch-outs, or “none”]
 
 ---
@@ -155,6 +157,8 @@ Do not restate the opening overview. Uh-ohs, then their summary.
 
 ```markdown
 **Lingering uh-ohs:** [compact list, or “none”]
+
+**Design forks:** [only if any file had Could have — file + fork in one line each, or omit section]
 
 That’s the files. In your own words: what does this PR do, why does it exist, and how do the pieces (and their dependencies) connect? I won’t close out on “done” alone.
 ```
