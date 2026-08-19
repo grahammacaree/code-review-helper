@@ -5,7 +5,7 @@ Use these shapes verbatim. Fill the brackets; do not add extra sections.
 ## Overview (opening turn)
 
 ```markdown
-**On:** `[branch]` (local HEAD matches PR tip)
+**On:** `[branch]` (local HEAD matches PR tip) — [PR url if any]
 
 **What's happening:** [short paragraph: concrete behavior after merge — who calls it, what comes back]
 
@@ -66,6 +66,7 @@ until then.
 ```markdown
 **File [n] of [total]:** `path/to/file.ts` — **modified** (or **new** / **deleted** / **renamed** `old` → `new`)
 **Focus:** L35–L38 [, L80–L92]  (omit Focus on a new file; say “whole file”)
+**Diff:** [GitHub Files-tab link for this path, or omit if no PR URL]
 
 **What:** [concrete change in this file]
 

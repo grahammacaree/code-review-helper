@@ -16,7 +16,7 @@ So the agent:
 
 1. Checks out the PR locally (clean tree first) so the editor shows the real files, not whatever branch you were on.
 2. Gives a **map** first — what happens after merge, why the PR exists, dependencies, how the files connect — then an ordered queue. Not GitHub’s alphabetical dump.
-3. Covers **one file per turn**: new vs modified, which lines to look at, what / why / links / a few evidence-backed watch-outs (“uh ohs”). Complex or novel functions that are central to the change get a **Look closer** callout (the contract: what it does, why it is shaped that way), and you have to explain those by name — not just the file. On files with a real, evidenced design fork, **Could have** names a plausible alternative and tradeoff (counterfactual review, not a teach-back gate). Uh ohs are the highest-leverage risks implied by *this* file, not a tour of every review dimension.
+3. Covers **one file per turn**: new vs modified, which lines to look at, a GitHub **Diff** link for that file’s hunks, what / why / links / a few evidence-backed watch-outs (“uh ohs”). Complex or novel functions that are central to the change get a **Look closer** callout (the contract: what it does, why it is shaped that way), and you have to explain those by name — not just the file. On files with a real, evidenced design fork, **Could have** names a plausible alternative and tradeoff (counterfactual review, not a teach-back gate). Uh ohs are the highest-leverage risks implied by *this* file, not a tour of every review dimension.
 4. **Will not advance** on “next”, “lgtm”, or a nod. You explain the file in your own words. Wrong or thin: it corrects one beat and stays put. A question before you’ve explained the file is answered, then it asks again. A question after you’ve already explained it does not make you recap. Skip exists if you are stuck. Teach-back is what / why (and named Look closer functions). It does not quiz you on Could have, uh ohs, or a review checklist.
 5. At the end you summarise the whole PR. It does not recap the opening for you to parrot. Design forks from the walk are collected in wrap-up if any came up.
 
@@ -43,7 +43,7 @@ The review method is not Cursor-specific. `SKILL.md` and `templates.md` are the 
 - **Claude Code / Codex / etc.** — paste into project instructions, or `@`-include the files when reviewing.
 - **Cursor** — install as above; the agent auto-discovers the skill from `~/.cursor/skills/` or `.cursor/skills/`.
 
-Editor “open this file at line 42” is optional. Without it, the agent gives path + focus range in each card. Teach-back, checkout, and gates still work.
+Editor “open this file at line 42” is optional. Without it, the agent gives path + focus range in each card. On a GitHub PR, each card also links that file’s diff on the PR Files tab. Teach-back, checkout, and gates still work.
 
 ## Use
 

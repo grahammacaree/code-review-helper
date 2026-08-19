@@ -30,8 +30,9 @@ Copy the output shapes from [templates.md](templates.md).
    connections) + ordered file queue. Stop. Do not start file 1 until
    they say go / start.
 4. One file card per turn (what / why / links / look closer / could have /
-   uh oh). Open that file in the editor when the host allows. Huge
-   generated files: hunks only.
+   uh oh), plus a GitHub **Diff** link when this is a GitHub PR. Open
+   that file in the editor when the host allows. Huge generated files:
+   hunks only.
 5. Teach-back gate: do not advance until they explain the file in their
    own words. Side questions are allowed; do not make them recap a file
    they already explained.
@@ -79,7 +80,8 @@ Accept a PR URL/number, a branch name, or “current branch vs base”.
 For a **PR number/URL**, resolve the **PR’s base branch**, not “whatever
 local `main` is”:
 
-- Prefer `gh pr view <n> --json baseRefName,headRefOid`.
+- Prefer `gh pr view <n> --json url,baseRefName,headRefOid`. Keep
+  `url` for per-file Diff links.
 - Else: `git fetch origin pull/<n>/merge` (no local branch) and use that
   commit’s **first parent** as the base tip.
 
@@ -188,6 +190,21 @@ against the PR merge-base.
 - **Renamed:** say old → new, then treat as modified (or new, if the
   body is a rewrite).
 
+**Diff** (navigation, not teach-back): if this is a GitHub PR, put a
+direct link to *this file’s* diff on the Files tab. Resolve `url` once
+(`gh pr view <n> --json url`, or the PR URL they pasted). Then:
+
+`{url}/files#diff-{sha256}`
+
+`sha256` is the SHA-256 of the path from the repo root, no leading
+slash, **no trailing newline** (`printf '%s' 'apps/foo/bar.ts' | shasum -a 256`).
+Use the new path after a rename; the old path for a delete. Omit **Diff**
+when there is no GitHub PR URL (branch-vs-base with no `gh` PR, or a
+non-GitHub remote). Do not invent an org/repo.
+
+The editor still opens the current file. The GitHub link is so they can
+see the hunks without leaving the walk.
+
 Open the current file beside the chat **before** the card when possible
 (host file-open tool, or path + focus lines). If the host cannot open
 files, the card must stand alone.
@@ -295,4 +312,6 @@ confusion.
 - Do not require teach-back on Could have (optional counterfactual).
 - Do not invent extra review-checklist prompts (tests, ops, consistency,
   rollout) as card sections or teach-back gates.
+- Do not invent a GitHub Diff URL when there is no PR (wrong org, guessed
+  hash, or linking the whole Files tab as if it were this file).
 - Do not post GitHub comments unless asked.
