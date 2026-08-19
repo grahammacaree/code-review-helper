@@ -21,84 +21,88 @@ Copy the output shapes from [templates.md](templates.md).
 
 ## Workflow
 
-1. Put the workspace on the PR (clean tree, then fetch/checkout). Do not
-   start the walkthrough until local HEAD matches the PR tip.
-2. Resolve the change set from that checkout. If it is large, **stop**
-   and offer quit / core-only / walk all. Do not start the overview
-   until they pick.
+1. Resolve the PR **without switching branches**. Fetch metadata and
+   diffs (`gh` / `git fetch`). Leave their working tree alone.
+2. If the change set is large, **stop** and offer quit / core-only /
+   walk all. Do not start the overview until they pick.
 3. Opening turn: robust overview (what / why / dependencies /
    connections) + ordered file queue. Stop. Do not start file 1 until
    they say go / start.
 4. One file card per turn (what / why / links / look closer / could have /
-   uh oh), plus a GitHub **Diff** link when this is a GitHub PR. Open
-   that file in the editor when the host allows. Huge generated files:
-   hunks only.
+   uh oh), plus a **per-file** GitHub **Diff** link (path filter + hash).
+   Open that URL in the host when it can — never the whole Files tab.
+   Huge generated files: hunks only.
 5. Teach-back gate: do not advance until they explain the file in their
    own words. Side questions are allowed; do not make them recap a file
    they already explained.
 6. After the last file: lingering uh-ohs, then a **final teach-back** —
    they summarise the whole PR. Do not dump a second full recap first.
-7. Offer to return them to the branch they were on before checkout.
+7. Checkout only as a **fallback** (diffs unavailable, or they want to
+   run the code). If you did check out, offer to restore their starting
+   branch at the end.
 
-## Checkout the PR locally (hard gate)
-
-Disk must match the PR so file cards can open the real version in the
-editor. Do this **before** the overview.
-
-Record `git branch --show-current` **before** switching. That is the
-branch to offer back at the end.
-
-1. `git status`. If the working tree is dirty, **stop**. Ask them to
-   switch to a clean branch (or confirm a stash). Do not stash, reset, or
-   checkout until the tree is clean or they confirm stash.
-2. Once clean, put them on the PR:
-   - Prefer `gh pr checkout <n>` when `gh` works.
-   - Else: `git fetch origin pull/<n>/head` then
-     `git checkout -B pr-<n> FETCH_HEAD`. Only `-B` that dedicated
-     `pr-<n>` branch — never `-B` `main` / `master` / their current
-     feature branch.
-3. Confirm `HEAD` matches the PR tip. If the host exposes active-branch
-   metadata (e.g. Cursor `SetActiveBranch`), set it to the checkout name.
-4. Branch-name or “current branch vs base” reviews: still require a
-   clean tree. If they are already on the branch to review and it
-   matches, skip the extra checkout.
-
-Do not create extra local refs (`pr-*-merge`, `pr-*-walkthrough`). Fetch
-merge metadata into `FETCH_HEAD` if needed, then drop it.
-
-Do not start the overview from a detached fetch, a mismatched branch, or
-a dirty tree.
-
-On **quit**, wrap-up complete, or they end the walkthrough: offer
-`git checkout <starting-branch>`. Do not switch if the tree is dirty.
-Do not delete `pr-<n>` unless they ask.
-
-## Resolve the change set
+## Resolve the change set (no checkout by default)
 
 Accept a PR URL/number, a branch name, or “current branch vs base”.
 
-For a **PR number/URL**, resolve the **PR’s base branch**, not “whatever
-local `main` is”:
+Do **not** checkout, stash, or require a clean tree just to walk the
+PR. Dirty work is fine. The agent reads the PR from GitHub/`gh`/fetched
+objects; the human reads hunks from the host’s GitHub/PR diff view (or
+the **Diff** link).
+
+For a **PR number/URL**, resolve the **PR’s base**, not “whatever local
+`main` is”:
 
 - Prefer `gh pr view <n> --json url,baseRefName,headRefOid`. Keep
   `url` for per-file Diff links.
+- File list and hunks: `gh pr diff <n>` / `gh pr diff <n> --name-only`.
+  Or `git fetch origin pull/<n>/head` (no local branch) and
+  `git diff origin/<base>...<headRefOid>` (three-dot) plus
+  `--name-status` / `--shortstat` against that merge-base.
 - Else: `git fetch origin pull/<n>/merge` (no local branch) and use that
-  commit’s **first parent** as the base tip.
+  commit’s **first parent** as the base tip, then fetch `pull/<n>/head`
+  for the tip.
 
-Fetch that base. The change set is `git diff origin/<base>...HEAD`
-(three-dot) plus `git diff --name-status` / `--shortstat` against the
-same merge-base. Do **not** use `git log origin/main..HEAD` — that lists
-every commit not in local main and inflates the PR when histories
-diverged or the PR is behind.
-
-If `gh` is unavailable for metadata, still fetch `pull/<n>/head` for
-checkout, and `pull/<n>/merge` only to read the first parent.
+Do **not** use `git log origin/main..HEAD` — that lists every commit
+not in local main and inflates the PR when histories diverged or the PR
+is behind. Do not create extra local refs (`pr-*-merge`,
+`pr-*-walkthrough`). Fetch into `FETCH_HEAD` if needed, then drop it.
 
 For a branch name or “current vs base”: merge-base with the repo’s
-default/base branch is fine.
+default/base branch is fine. If they are already on that branch, local
+`git diff` is enough.
 
 Build the full changed-file list once. Do not dump every diff in the first
 turn.
+
+## Checkout fallback (only if needed)
+
+Checkout (clean tree, then switch) **only** when:
+
+- the host cannot show this PR’s diffs (no GitHub integration, `gh`
+  failed, and you cannot fetch the patch), or
+- they explicitly want the branch on disk (run tests, follow unchanged
+  callers, etc.).
+
+Until then, do not touch `HEAD`. Do not open workspace files as if they
+were the PR — local paths may be a different branch.
+
+If you must checkout:
+
+1. Record `git branch --show-current`. That is the branch to offer back.
+2. `git status`. If dirty, **stop**. Ask them to switch or confirm a
+   stash. Do not stash, reset, or checkout until the tree is clean or
+   they confirm stash.
+3. Prefer `gh pr checkout <n>`. Else: `git fetch origin pull/<n>/head`
+   then `git checkout -B pr-<n> FETCH_HEAD`. Only `-B` that dedicated
+   `pr-<n>` branch — never `-B` `main` / `master` / their current
+   feature branch.
+4. Confirm `HEAD` matches the PR tip. If the host exposes active-branch
+   metadata (e.g. Cursor `SetActiveBranch`), set it to the checkout name.
+
+On **quit** / wrap-up **after a checkout**: offer
+`git checkout <starting-branch>`. Do not switch if dirty. Do not delete
+`pr-<n>` unless they ask. If you never checked out, do not offer this.
 
 ## Large PR gate
 
@@ -191,23 +195,27 @@ against the PR merge-base.
   body is a rewrite).
 
 **Diff** (navigation, not teach-back): if this is a GitHub PR, put a
-direct link to *this file’s* diff on the Files tab. Resolve `url` once
-(`gh pr view <n> --json url`, or the PR URL they pasted). Then:
+link that shows **only this path**, not the whole Files tab. Resolve
+`url` once (`gh pr view <n> --json url`, or the PR URL they pasted).
+Percent-encode the path. Then:
 
-`{url}/files#diff-{sha256}`
+`{url}/files?file-filters[]=path:{path}#diff-{sha256}`
+
+Example: `…/pull/6384/files?file-filters[]=path:apps/foo/bar.ts#diff-{sha256}`
 
 `sha256` is the SHA-256 of the path from the repo root, no leading
 slash, **no trailing newline** (`printf '%s' 'apps/foo/bar.ts' | shasum -a 256`).
-Use the new path after a rename; the old path for a delete. Omit **Diff**
-when there is no GitHub PR URL (branch-vs-base with no `gh` PR, or a
-non-GitHub remote). Do not invent an org/repo.
+Use the new path after a rename; the old path for a delete. Optional:
+append `R{firstFocusLine}` after the hash to land on that hunk.
 
-The editor still opens the current file. The GitHub link is so they can
-see the hunks without leaving the walk.
+Omit **Diff** when there is no GitHub PR URL. Do not invent an org/repo.
 
-Open the current file beside the chat **before** the card when possible
-(host file-open tool, or path + focus lines). If the host cannot open
-files, the card must stand alone.
+When the host can open URLs (e.g. Cursor `open_resource`), open **that
+per-file URL** beside the chat **before** the card. Never open `{url}`,
+`{url}/files`, or the GitHub PR overview — those dump every file. If the
+host GitHub panel still shows the full change set, do not use it as the
+file view; the card + filtered **Diff** link must stand alone. Open a
+local `file://` path only if `HEAD` is the PR tip.
 
 | Section | Content |
 |---|---|
@@ -313,5 +321,7 @@ confusion.
 - Do not invent extra review-checklist prompts (tests, ops, consistency,
   rollout) as card sections or teach-back gates.
 - Do not invent a GitHub Diff URL when there is no PR (wrong org, guessed
-  hash, or linking the whole Files tab as if it were this file).
+  hash).
+- Do not open the PR root or `/files` without `file-filters[]=path:` and
+  `#diff-{sha256}` — that is the whole change set, not this file.
 - Do not post GitHub comments unless asked.

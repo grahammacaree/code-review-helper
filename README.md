@@ -43,7 +43,7 @@ The review method is not Cursor-specific. `SKILL.md` and `templates.md` are the 
 - **Claude Code / Codex / etc.** — paste into project instructions, or `@`-include the files when reviewing.
 - **Cursor** — install as above; the agent auto-discovers the skill from `~/.cursor/skills/` or `.cursor/skills/`.
 
-Editor “open this file at line 42” is optional. Without it, the agent gives path + focus range in each card. On a GitHub PR, each card also links that file’s diff on the PR Files tab. Teach-back, checkout, and gates still work.
+Editor “open this file at line 42” is optional. Without it, the agent gives path + focus range in each card. On a GitHub PR, each card links **that path’s** diff (`file-filters` + `#diff-…`), not the whole Files tab, and the host should open that URL rather than the PR overview. Teach-back, checkout fallback, and gates still work.
 
 ## Use
 
