@@ -55,10 +55,15 @@ For a **PR number/URL**, resolve the **PR’s base**, not “whatever local
 
 - Prefer `gh pr view <n> --json url,baseRefName,headRefOid`. Keep
   `url` for per-file Diff links.
-- File list and hunks: `gh pr diff <n>` / `gh pr diff <n> --name-only`.
-  Or `git fetch origin pull/<n>/head` (no local branch) and
+- File list and hunks: `gh pr diff <n>` / `gh pr diff <n> --name-only`,
+  and per file `gh pr diff <n> -- path/to/file`. Churn from
+  `gh pr view <n> --json additions,deletions,changedFiles` (or
+  `--shortstat` against fetched OIDs), not local `HEAD`.
+- Or `git fetch origin pull/<n>/head` (no local branch) and
   `git diff origin/<base>...<headRefOid>` (three-dot) plus
   `--name-status` / `--shortstat` against that merge-base.
+  Read a file at the PR tip with `git show <headRefOid>:path` after
+  that fetch — **not** the workspace copy.
 - Else: `git fetch origin pull/<n>/merge` (no local branch) and use that
   commit’s **first parent** as the base tip, then fetch `pull/<n>/head`
   for the tip.
@@ -108,9 +113,10 @@ On **quit** / wrap-up **after a checkout**: offer
 
 File-by-file teach-back of a generated megadiff recreates the glaze this
 skill exists to prevent. After the file list exists, count **non-noise**
-files and churn (`insertions + deletions` from `git diff --shortstat`,
-excluding lockfiles, generated dirs, and pure assets unless the PR is
-about those).
+files and churn (`insertions + deletions` from `gh pr view` JSON or
+`git diff --shortstat` against **fetched PR OIDs**, not local `HEAD`).
+Exclude lockfiles, generated dirs, and pure assets unless the PR is
+about those.
 
 Treat it as **large** if either:
 
@@ -120,7 +126,7 @@ Treat it as **large** if either:
 Then **stop** before the overview. Report the counts. Offer exactly:
 
 - **Quit** — end. No cards, no fake LGTM. Offer to restore their
-  starting branch.
+  starting branch **only if you checked out**.
 - **Core only** — propose at most **8** load-bearing files (the ones
   needed to explain the PR: types/config → core logic → a caller →
   tests if they change behavior). If the spine is bigger, pick 8 and
@@ -166,9 +172,9 @@ lockfile/generated).
 
 For **huge generated files** (swagger, lockfiles, snapshots, generated
 GraphQL, minified bundles): never open or read the whole file. Build the
-card from `git diff` hunks only (path, a few operation/schema names,
-focus line ranges). Teach-back may be one sentence (“generated contract
-for X”).
+card from `gh pr diff` / `git diff` hunks only (path, a few
+operation/schema names, focus line ranges). Teach-back may be one
+sentence (“generated contract for X”).
 
 Do not steal the file cards: no per-file what/why here.
 
@@ -180,17 +186,23 @@ Cover only the current file. Cite small ranges when they help; do not paste
 the whole file.
 
 State **new / modified / deleted / renamed** up front. Wrong guesses are
-worse than skipping — use `git diff --name-status` (and the hunk headers)
-against the PR merge-base.
+worse than skipping — use `gh pr diff --name-only` / fetched
+`--name-status` (and hunk headers) against the PR merge-base, not the
+workspace.
 
-- **New:** whole file is in play. Open at a sensible start (`#L1` or the
-  export/handler).
+The agent’s source for this file is the **PR patch**, not disk:
+
+- `gh pr diff <n> -- path` (preferred), or `git show <headRefOid>:path`
+  after fetch.
+- Do **not** `Read` a workspace path unless `HEAD` is the PR tip. Missing
+  or different local files are expected. That is not a blocker and not
+  a reason to checkout.
+
+- **New:** whole file is in play (from the patch). **Diff** URL; no
+  local open.
 - **Modified:** list **Focus** as the changed line ranges (from diff
-  hunks, coalesced). Jump to
-  `file:///abs/path#L<first>-L<last>` when the host can open files at a
-  line (e.g. Cursor `open_resource`; otherwise give path + range in the
-  card). Many hosts jump but cannot highlight a selection.
-- **Deleted:** do not open; say it was removed and show the old path.
+  hunks, coalesced). **Diff** URL (optional `R{firstFocusLine}`).
+- **Deleted:** say it was removed, show the old path, **Diff** URL.
 - **Renamed:** say old → new, then treat as modified (or new, if the
   body is a rewrite).
 
@@ -214,8 +226,8 @@ When the host can open URLs (e.g. Cursor `open_resource`), open **that
 per-file URL** beside the chat **before** the card. Never open `{url}`,
 `{url}/files`, or the GitHub PR overview — those dump every file. If the
 host GitHub panel still shows the full change set, do not use it as the
-file view; the card + filtered **Diff** link must stand alone. Open a
-local `file://` path only if `HEAD` is the PR tip.
+file view; the card + filtered **Diff** link must stand alone. Do not
+open a local `file://` path unless `HEAD` is the PR tip.
 
 | Section | Content |
 |---|---|
@@ -245,11 +257,12 @@ If a dimension is not central here, omit it. Tests, ops, consistency,
 and rollout belong in a later defect pass unless they *are* the uh-oh
 or the reason a function is in Look closer.
 
-For huge generated files: hunks only (see Opening turn). Do not open a
-10k-line swagger/lockfile whole.
+For huge generated files: hunks only (see Opening turn). Do not fetch or
+paste a 10k-line swagger/lockfile.
 
-If **Look closer** is not none and the host can open files, jump to the
-first named function (`#L<start>`) as well as the file’s focus range.
+If **Look closer** is not none, the **Diff** URL may use `R{start}` for
+the first named function. Do not jump a local file unless `HEAD` is the
+PR tip.
 
 End every file turn with the teach-back prompt from [templates.md](templates.md). If Look closer named functions, the prompt must ask about those **by name**. Do not advance until they can explain what those functions do, not only the file’s job.
 
@@ -292,8 +305,8 @@ words: what it does, why, how the files and dependencies connect.
 
 If the summary is thin or wrong: same gate as a file — one short
 correction, stay here. When it’s good enough: one-line confirm, offer to
-restore their starting branch, then offer a defect-finding pass only if
-useful.
+restore their starting branch **only if you checked out**, then offer a
+defect-finding pass only if useful.
 
 ## Tone
 
@@ -305,14 +318,20 @@ confusion.
 
 - Do not teach-back binaries or basic SVGs/images (batch + skip).
 - Do not open or read entire swagger/lockfile/generated dumps.
+- Do not treat workspace files as the PR. Disk may be another branch
+  (or the path may not exist locally). Read `gh pr diff` / `git show
+  <oid>:path`. A failed local `Read` is not a failure of the walk.
+- Do not checkout, stash, or demand a clean tree because a file is
+  missing locally.
+- Do not start a walkthrough with no PR patch (`gh`, fetched OIDs, or
+  checkout fallback).
 - Do not diff against local `main` when the PR names another base.
-- Do not leave them on `pr-<n>` without offering to switch back.
+- Do not leave them on `pr-<n>` without offering to switch back (only
+  if you checked out).
 - Do not silently shorten a large PR or drop teach-back to “get through it.”
 - Do not give a second full recap at the end before they summarise.
 - Do not make them recap a file they already explained after a side question.
 - Do not advance without a teach-back (or an explicit skip).
-- Do not start a walkthrough until local HEAD matches the PR (clean
-  tree, then checkout).
 - Do not confuse this skill with an automated defect hunt.
 - Do not invent uh-ohs to look thorough.
 - Do not invent Could have alternatives on obvious or thin files.

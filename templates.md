@@ -5,7 +5,9 @@ Use these shapes verbatim. Fill the brackets; do not add extra sections.
 ## Overview (opening turn)
 
 ```markdown
-**On:** `[branch]` (local HEAD matches PR tip) — [PR url if any]
+**On:** reviewing PR `#n` from [url] (working tree unchanged)
+
+If you checked out, use: **On:** `[branch]` (local HEAD matches PR tip) — [url]
 
 **What's happening:** [short paragraph: concrete behavior after merge — who calls it, what comes back]
 
@@ -51,14 +53,14 @@ A full file-by-file walk will take a while. Pick one:
 Core-only is still a real review of the spine, not a skim past the gate.
 ```
 
-## Blocked: dirty tree
+## Blocked: dirty tree (checkout fallback only)
 
-Do not checkout. Wait.
+Only if you were about to checkout. Do not use this on the default path.
 
 ```markdown
 Working tree isn’t clean (`[short status]`). Switch to a clean branch
 (or tell me to stash) before I check out this PR. I won’t move files
-until then.
+until then. We can keep walking from GitHub diffs without checkout.
 ```
 
 ## File card
@@ -146,11 +148,13 @@ Skipped `path/to/file.ts`.
 
 ## Quit (large-PR gate or they end early)
 
-Offer to restore the starting branch. Do not switch if dirty.
+Offer to restore the starting branch **only if you checked out**.
 
 ```markdown
-Stopping here. Want me to check out `[starting-branch]` again?
+Stopping here.
 ```
+
+If you checked out, add: Want me to check out `[starting-branch]` again?
 
 ## Wrap-up
 
@@ -169,7 +173,7 @@ That’s the files. In your own words: what does this PR do, why does it exist, 
 ```markdown
 That’s the idea.
 
-Want me to check out `[starting-branch]` again?
-
 If you want a defect pass next, say so. I won’t start one unless you ask.
 ```
+
+If you checked out, add: Want me to check out `[starting-branch]` again?
