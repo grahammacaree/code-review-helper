@@ -13,9 +13,13 @@ description: >-
 
 Teach the change set. This is not a defect hunt and not a ship checklist.
 
-Stay read-only. Do not post GitHub review comments, push, or fix code unless
-they explicitly ask. Do not auto-invoke defect-hunting review agents; offer
-a defect pass or their own checklist only after wrap-up if useful.
+Stay read-only on **code and review comments**. Do not post GitHub review
+comments, push, or fix code unless they explicitly ask. **Exception:**
+GitHub “Viewed” flags on files, as navigation so the host can hide
+everything except the current path (see Focus the file list). Do not
+submit Approve / Comment / Request changes. Do not auto-invoke
+defect-hunting review agents; offer a defect pass or their own checklist
+only after wrap-up if useful.
 
 Copy the output shapes from [templates.md](templates.md).
 
@@ -30,7 +34,8 @@ Copy the output shapes from [templates.md](templates.md).
    they say go / start.
 4. One file card per turn (what / why / links / look closer / could have /
    uh oh), plus a **per-file** GitHub **Diff** link (path filter + hash).
-   Open that URL in the host when it can — never the whole Files tab.
+   Mark other GitHub files **viewed** so the host can hide them. Open the
+   per-file Diff URL when the host can — never the whole Files tab.
    Huge generated files: hunks only.
 5. Teach-back gate: do not advance until they explain the file in their
    own words. Side questions are allowed; do not make them recap a file
@@ -222,6 +227,33 @@ append `R{firstFocusLine}` after the hash to land on that hunk.
 
 Omit **Diff** when there is no GitHub PR URL. Do not invent an org/repo.
 
+## Focus the file list (GitHub Viewed)
+
+Cursor/GitHub have no “open this path only” hook. They *will* hide
+**viewed** files. Use that as navigation, not as a review.
+
+Once per walk, resolve the GraphQL id: `gh pr view <n> --json id`
+(`id` is the node id). Then, **before each file card**:
+
+1. `unmarkFileAsViewed` for the **current** path (so it stays visible).
+2. `markFileAsViewed` for **every other** changed path (queue + batched
+   noise). On later files, marking the one you just left is enough if
+   the rest are already viewed.
+
+```bash
+gh api graphql -f query='mutation($id:ID!,$path:String!){markFileAsViewed(input:{pullRequestId:$id,path:$path}){clientMutationId}}' -f id="$PR_ID" -f path="$PATH"
+```
+
+Same shape with `unmarkFileAsViewed`. If GraphQL fails (auth, id, path),
+skip — do not checkout, do not stop the walk.
+
+Do **not** `open_resource` the PR root or unfiltered `/files` (that
+dumps every diff). The **Diff** link is still the per-file URL.
+
+First file only, if the tree still shows everything: one line — turn on
+**Hide viewed files** in the GitHub/Cursor PR changes tree. Do not
+repeat that on later cards.
+
 When the host can open URLs (e.g. Cursor `open_resource`), open **that
 per-file URL** beside the chat **before** the card. Never open `{url}`,
 `{url}/files`, or the GitHub PR overview — those dump every file. If the
@@ -344,3 +376,5 @@ confusion.
 - Do not open the PR root or `/files` without `file-filters[]=path:` and
   `#diff-{sha256}` — that is the whole change set, not this file.
 - Do not post GitHub comments unless asked.
+- Do not submit a PR review (Approve / Comment / Request changes) as
+  part of this walk. Viewed flags only.
