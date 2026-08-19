@@ -16,9 +16,11 @@ So the agent:
 
 1. Checks out the PR locally (clean tree first) so the editor shows the real files, not whatever branch you were on.
 2. Gives a **map** first — what happens after merge, why the PR exists, dependencies, how the files connect — then an ordered queue. Not GitHub’s alphabetical dump.
-3. Covers **one file per turn**: new vs modified, which lines to look at, what / why / links / a few evidence-backed watch-outs (“uh ohs”). Complex or novel functions get a **Look closer** callout, and you have to explain those by name — not just the file. On files with a real design fork, **Could have** names a plausible alternative and tradeoff (counterfactual review, not a teach-back gate).
-4. **Will not advance** on “next”, “lgtm”, or a nod. You explain the file in your own words. Wrong or thin: it corrects one beat and stays put. A question before you’ve explained the file is answered, then it asks again. A question after you’ve already explained it does not make you recap. Skip exists if you are stuck.
+3. Covers **one file per turn**: new vs modified, which lines to look at, what / why / links / a few evidence-backed watch-outs (“uh ohs”). Complex or novel functions that are central to the change get a **Look closer** callout (the contract: what it does, why it is shaped that way), and you have to explain those by name — not just the file. On files with a real, evidenced design fork, **Could have** names a plausible alternative and tradeoff (counterfactual review, not a teach-back gate). Uh ohs are the highest-leverage risks implied by *this* file, not a tour of every review dimension.
+4. **Will not advance** on “next”, “lgtm”, or a nod. You explain the file in your own words. Wrong or thin: it corrects one beat and stays put. A question before you’ve explained the file is answered, then it asks again. A question after you’ve already explained it does not make you recap. Skip exists if you are stuck. Teach-back is what / why (and named Look closer functions). It does not quiz you on Could have, uh ohs, or a review checklist.
 5. At the end you summarise the whole PR. It does not recap the opening for you to parrot. Design forks from the walk are collected in wrap-up if any came up.
+
+Review texture (contracts, risk, size, counterfactuals) lives in those existing buckets when the file actually has it. The overview / large-PR gate is where size and split-worthiness show up. Tests, ops, and rollout belong in a later defect pass unless they *are* the reason something is in Look closer or Uh oh.
 
 Uh ohs are not a bot review. They are “look at this if you are going to thumbs-up.” Automated defect hunting is a different pass, afterward, if you want it.
 
@@ -57,7 +59,7 @@ New SVGs, jpgs, and other pure assets are listed once and skipped. No teach-back
 
 - Not a replacement for GitHub review comments (it stays read-only unless you ask it to comment).
 - Not Bugbot / an automated bug finder.
-- Not a ship checklist for your own diffs.
+- Not a ship checklist for your own diffs, and not a full code-review rubric on every file.
 
 ## Files
 

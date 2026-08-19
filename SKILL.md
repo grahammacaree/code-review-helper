@@ -197,13 +197,28 @@ files, the card must stand alone.
 | **What** | Concrete change in this file (behavior, API, structure). Not a line dump. |
 | **Why** | Why this file had to change for the PR’s goal. |
 | **Links** | How it connects to files already covered and to upcoming files in the queue. |
-| **Look closer** | 0–3 **named** functions/methods that are complex or novel. Understand this. One line each: name + why (new protocol, dense control flow, non-obvious invariant, first of its kind here). If none, say “none”. Not thin wrappers, re-exports, or routine CRUD. |
+| **Look closer** | 0–3 **named** functions/methods that are complex or novel, and are central to understanding this change. Understand this. One line each: name + why (new protocol, dense control flow, non-obvious invariant, first of its kind here). If none, say “none”. Not thin wrappers, re-exports, or routine CRUD. |
 | **Could have** | 0–2 **design forks** on this file only when there was a real choice (API shape, layer, library, sync vs async), and when the code or surrounding context gives evidence that this was an intentional design choice. One line each: plausible alternative + short tradeoff vs what they shipped. If the file is obvious or there's no fork, say “none”. Not a teach-back requirement — counterfactual review, not “you should have done X.” |
-| **Uh oh** | 0–3 watch-outs: bugs, missing tests, risky edges, surprising coupling. Might be wrong. If none, say “none”. Do not invent. |
+| **Uh oh** | 0–3 watch-outs: bugs, missing tests, risky edges, surprising coupling. Prioritize the highest-leverage risks implied by the code. Might be wrong. If none, say “none”. Do not invent. |
 
 Look closer, Could have, and Uh oh are different buckets. The same
 function may appear in Look closer and Uh oh; Could have is about
 choices, not defects.
+
+Review texture lives in those buckets — do not add extra card
+sections or extra teach-back questions. Put it where it belongs,
+only when this file actually has it:
+
+- **Overview / large-PR gate:** size, split-worthiness, generated noise.
+- **Look closer:** the behavioral contract (inputs, outputs, invariants,
+  why it is shaped that way).
+- **Uh oh:** highest-leverage risks implied by the code (correctness,
+  missing coverage, coupling) — not a tour of every review dimension.
+- **Could have:** evidenced design forks only.
+
+If a dimension is not central here, omit it. Tests, ops, consistency,
+and rollout belong in a later defect pass unless they *are* the uh-oh
+or the reason a function is in Look closer.
 
 For huge generated files: hunks only (see Opening turn). Do not open a
 10k-line swagger/lockfile whole.
@@ -236,7 +251,11 @@ it exists, and how the pieces connect (dependencies + call chain).
   the walkthrough.)
 
 “Good enough” means they could explain it to a teammate, not that they
-recited the card.
+recited the card. If Look closer named a function because of an
+invariant or contract, a paraphrase that never touches that piece is
+thin — still the existing gate, not a new one. Do not require them to
+cover Could have, Uh oh, or review-checklist items that were not in
+the card.
 
 ## Wrap-up (final teach-back)
 
@@ -274,4 +293,6 @@ confusion.
 - Do not invent Could have alternatives on obvious or thin files.
 - Do not treat Look closer as Uh oh (or flag every new function).
 - Do not require teach-back on Could have (optional counterfactual).
+- Do not invent extra review-checklist prompts (tests, ops, consistency,
+  rollout) as card sections or teach-back gates.
 - Do not post GitHub comments unless asked.
