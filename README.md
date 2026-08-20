@@ -16,11 +16,11 @@ So the agent:
 
 1. Checks out the PR locally (clean tree first) so the editor shows the **real files** — clickable, with surrounding context — not only hunks. GitHub/`gh` can still supply metadata; checkout stays the primary path.
 2. Gives a **map** first — what happens after merge, why the PR exists, dependencies, how the files connect — then an ordered queue. Not GitHub’s alphabetical dump.
-3. Covers **one file per turn**: opens the local file at the changed lines, optional GitHub **Diff** link for that path’s hunks (`file-filters` + `#diff-…`, never the whole Files tab), what / why / links / a few evidence-backed watch-outs (“uh ohs”). Complex or novel functions that are central to the change get a **Look closer** callout (the contract: what it does, why it is shaped that way), and you have to explain those by name — not just the file. On files with a real, evidenced design fork, **Could have** names a plausible alternative and tradeoff (counterfactual review, not a teach-back gate). Uh ohs are the highest-leverage risks implied by *this* file, not a tour of every review dimension.
+3. Covers **one file per turn**: opens the **local** file at the changed lines (primary view — clickable, full context). Optionally adds a GitHub **Diff** link for that path’s hunks only (`file-filters` + `#diff-…`; never opens the whole Files tab). Then what / why / links / a few evidence-backed watch-outs (“uh ohs”). Complex or novel functions that are central to the change get a **Look closer** callout (the contract: what it does, why it is shaped that way), and you have to explain those by name — not just the file. On files with a real, evidenced design fork, **Could have** names a plausible alternative and tradeoff (counterfactual review, not a teach-back gate). Uh ohs are the highest-leverage risks implied by *this* file, not a tour of every review dimension.
 4. **Will not advance** on “next”, “lgtm”, or a nod. You explain the file in your own words. Wrong or thin: it corrects one beat and stays put. A question before you’ve explained the file is answered, then it asks again. A question after you’ve already explained it does not make you recap. Skip exists if you are stuck. Teach-back is what / why (and named Look closer functions). It does not quiz you on Could have, uh ohs, or a review checklist.
-5. At the end you summarise the whole PR. It does not recap the opening for you to parrot. Design forks from the walk are collected in wrap-up if any came up.
+5. At the end you summarise the whole PR. It does not recap the opening for you to parrot. Design forks from the walk are collected in wrap-up if any came up. Then it offers to restore the branch you started from.
 
-Review texture (contracts, risk, size, counterfactuals) lives in those existing buckets when the file actually has it. The overview / large-PR gate is where size and split-worthiness show up. Tests, ops, and rollout belong in a later defect pass unless they *are* the reason something is in Look closer or Uh oh.
+Review texture (contracts, risk, size, counterfactuals) lives in those existing buckets when the file actually has it. The overview / large-PR gate is where size and split-worthiness show up. Tests, ops, and rollout belong in a later defect pass unless they *are* the reason something is in Look closer or Uh oh. Optional GitHub **Viewed** flags can quiet the PR file tree; they are not a substitute for checkout.
 
 Uh ohs are not a bot review. They are “look at this if you are going to thumbs-up.” Automated defect hunting is a different pass, afterward, if you want it.
 
@@ -43,13 +43,13 @@ The review method is not Cursor-specific. `SKILL.md` and `templates.md` are the 
 - **Claude Code / Codex / etc.** — paste into project instructions, or `@`-include the files when reviewing.
 - **Cursor** — install as above; the agent auto-discovers the skill from `~/.cursor/skills/` or `.cursor/skills/`.
 
-The host opens the checked-out file beside the chat when it can. On a GitHub PR, each card may also link **that path’s** Diff (not the whole Files tab). Teach-back and gates still work if the host cannot open files.
+The host opens the checked-out file beside the chat when it can — that is the primary surface. On a GitHub PR, each card may also link **that path’s** Diff for hunks (not the whole Files tab). Teach-back and gates still work if the host cannot open files; checkout still happens so disk matches the PR.
 
 ## Use
 
 In Cursor, paste a PR URL or say **walk me through this PR** / **pr-file-walkthrough**.
 
-You need a **clean working tree**. Dirty? Switch or stash first; the skill will not checkout over your work. Then say **start** after the overview.
+You need a **clean working tree**. Dirty? Switch or stash first; the skill will not checkout over your work. Having GitHub connected does **not** skip checkout — local files are required. Then say **start** after the overview.
 
 If the PR is large (≥ 20 files or ≥ 1500 lines of real churn, ignoring lockfiles/generated/images), it stops and asks **quit**, **core only** (at most 8 load-bearing files, still with teach-back), or **walk all**. That is for AI-sized diffs: forcing every generated file would recreate the glaze. Core-only is not a shortcut past understanding the spine. When you finish or quit, it offers to put you back on the branch you started from.
 
