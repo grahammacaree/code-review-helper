@@ -74,7 +74,8 @@ until then.
 
 **Links:** [already covered: …] [upcoming: …]
 
-**Look closer:** [`parseNextCursorFromLinkHeader` — [why to understand it]] or **none**
+**Look closer:** [`parseNextCursorFromLinkHeader` L42–L68 — [why]] or **none**
+**Map:** [optional 2–5 lines: how Look closer pieces connect / order of work — only if interlocking; else omit]
 
 **Could have:** [0–2 design forks: alternative + tradeoff vs what shipped, or **none**]
 
@@ -88,8 +89,12 @@ Before we continue: in your own words, what does this file change do, and why wa
 When Look closer is not none, replace the last paragraph with:
 
 ```markdown
-Before we continue: in your own words, what does this file change do, and why was it needed? Also: what does `[Name]` do, and why is it shaped that way? Reply with that (or questions). Say **next** only after you’ve explained it — I won’t advance on “next” alone.
+Before we continue: in your own words, what does this file change do, and why was it needed? Also: what does `[Name]` (around L[n]) do, and why is it shaped that way? Reply with that (or questions). Say **next** only after you’ve explained it — I won’t advance on “next” alone.
 ```
+
+If a Map was shown, add: how do those pieces fit together?
+
+When Look closer is none, keep the first teach-back paragraph.
 
 ## Teach-back: inadequate
 

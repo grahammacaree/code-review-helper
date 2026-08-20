@@ -242,13 +242,21 @@ checkout or for opening the local file.
 | **What** | Concrete change in this file (behavior, API, structure). Not a line dump. |
 | **Why** | Why this file had to change for the PR’s goal. |
 | **Links** | How it connects to files already covered and to upcoming files in the queue. |
-| **Look closer** | 0–3 **named** functions/methods that are complex or novel, and are central to understanding this change. Understand this. One line each: name + why (new protocol, dense control flow, non-obvious invariant, first of its kind here). If none, say “none”. Not thin wrappers, re-exports, or routine CRUD. |
+| **Look closer** | 0–3 **named** functions/methods (or other hotspots) that are complex or novel, and are central to understanding this change. Each entry: **name + line range + why** (new protocol, dense control flow, non-obvious invariant, first of its kind here). On large files, line ranges are **required** — a bare name is not enough to find the spot. If none, say “none”. Not thin wrappers, re-exports, or routine CRUD. |
 | **Could have** | 0–2 **design forks** on this file only when there was a real choice (API shape, layer, library, sync vs async), and when the code or surrounding context gives evidence that this was an intentional design choice. One line each: plausible alternative + short tradeoff vs what they shipped. If the file is obvious or there's no fork, say “none”. Not a teach-back requirement — counterfactual review, not “you should have done X.” |
 | **Uh oh** | 0–3 watch-outs: bugs, missing tests, risky edges, surprising coupling. Prioritize the highest-leverage risks implied by the code. Might be wrong. If none, say “none”. Do not invent. |
 
+When Look closer is not none and the file is hard to hold in one mental
+model (several interlocking helpers, a state machine, parse → transform →
+emit, etc.), you **may** add a short **Map** under Look closer: 2–5 lines
+of how those pieces call each other or order the work. Judgment call —
+only when the names alone would leave the behavior opaque. Do not invent
+architecture diagrams for simple files.
+
 Look closer, Could have, and Uh oh are different buckets. The same
 function may appear in Look closer and Uh oh; Could have is about
-choices, not defects.
+choices, not defects. Map is part of Look closer’s explanation, not a
+separate teach-back gate.
 
 Review texture lives in those buckets — do not add extra card
 sections or extra teach-back questions. Put it where it belongs,
@@ -256,7 +264,8 @@ only when this file actually has it:
 
 - **Overview / large-PR gate:** size, split-worthiness, generated noise.
 - **Look closer:** the behavioral contract (inputs, outputs, invariants,
-  why it is shaped that way).
+  why it is shaped that way), with line ranges on large files; optional
+  Map when interlocking pieces need a path through the file.
 - **Uh oh:** highest-leverage risks implied by the code (correctness,
   missing coverage, coupling) — not a tour of every review dimension.
 - **Could have:** evidenced design forks only.
@@ -269,17 +278,20 @@ For huge generated files: hunks only (see Opening turn). Do not open a
 10k-line swagger/lockfile whole.
 
 If **Look closer** is not none and the host can open files, jump to the
-first named function (`#L<start>`) as well as the file’s focus range.
+first hotspot’s line range (`#L<start>` or `#L<start>-L<end>`) as well as
+the file’s Focus ranges.
 
-End every file turn with the teach-back prompt from [templates.md](templates.md). If Look closer named functions, the prompt must ask about those **by name**. Do not advance until they can explain what those functions do, not only the file’s job.
+End every file turn with the teach-back prompt from [templates.md](templates.md). If Look closer named hotspots, the prompt must ask about those **by name** (and may point at the line range). If a Map was given, they should be able to say how the pieces connect — still the Look closer gate, not a new section. Do not advance until they can explain what those hotspots do, not only the file’s job.
 
 ## Teach-back gate (hard blocker)
 
 Do **not** advance on “next”, “ok”, “lgtm”, or emoji alone.
 
 **Per file:** require a real paraphrase of **what** + **why**. If Look
-closer named functions, they must cover those by name. Connections
-are optional but encouraged.
+closer named hotspots, they must cover those by name (line ranges help
+them find the spot; they need not recite numbers). If a Map was shown,
+connections among those pieces should show up in the paraphrase.
+Connections to other files are optional but encouraged.
 
 **Final:** require a real paraphrase of the whole PR — what it does, why
 it exists, and how the pieces connect (dependencies + call chain).
@@ -343,6 +355,8 @@ confusion.
 - Do not invent uh-ohs to look thorough.
 - Do not invent Could have alternatives on obvious or thin files.
 - Do not treat Look closer as Uh oh (or flag every new function).
+- Do not give Look closer entries without line ranges on large files.
+- Do not invent a Map on thin or obvious files.
 - Do not require teach-back on Could have (optional counterfactual).
 - Do not invent extra review-checklist prompts (tests, ops, consistency,
   rollout) as card sections or teach-back gates.
