@@ -20,6 +20,24 @@ export function rememberRepo(path: string): string[] {
   return next;
 }
 
+const SESSION_KEY = "crw.session-id";
+
+export function loadSessionId(): string | null {
+  try {
+    return localStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function rememberSession(id: string): void {
+  localStorage.setItem(SESSION_KEY, id);
+}
+
+export function forgetSession(): void {
+  localStorage.removeItem(SESSION_KEY);
+}
+
 export function displayRepo(path: string): string {
   const home = "/Users/grahammacaree";
   if (path === "~" || path === home || path === `${home}/`) return "";

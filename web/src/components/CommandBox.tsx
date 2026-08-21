@@ -21,11 +21,12 @@ export function CommandBox({
 }: {
   session: SessionSnapshot | null;
   disabled: boolean;
-  onSend: (text: string) => void;
+  onSend: (text: string, mode: "ask" | "teachback") => void;
   onAction: (action: ChipAction) => void;
   onInterrupt: () => void;
 }) {
   const [text, setText] = useState("");
+  const [mode, setMode] = useState<"ask" | "teachback">("teachback");
   const phase = session?.phase;
   const textMode = canSubmitText(phase);
   const canSend = textMode && text.trim().length > 0;
@@ -43,24 +44,52 @@ export function CommandBox({
           </button>
         </div>
       )}
-      {chips.length > 0 && !disabled && (
-        <div className="chips" role="group" aria-label="Walkthrough actions">
-          {chips.map((chip) => (
-            <button
-              key={chip.action}
-              type="button"
-              className={chip.primary ? undefined : "secondary"}
-              disabled={disabled}
-              onClick={() => onAction(chip.action)}
+      {!disabled && (chips.length > 0 || textMode) && (
+        <div className="command-bar">
+          {chips.length > 0 && (
+            <div className="chips" role="group" aria-label="Walkthrough actions">
+              {chips.map((chip) => (
+                <button
+                  key={chip.action}
+                  type="button"
+                  className={chip.primary ? undefined : "secondary"}
+                  disabled={disabled}
+                  onClick={() => onAction(chip.action)}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {textMode && (
+            <div
+              className="chips command-mode"
+              role="group"
+              aria-label="Message type"
             >
-              {chip.label}
-            </button>
-          ))}
+              <button
+                type="button"
+                className={mode === "teachback" ? undefined : "secondary"}
+                onClick={() => setMode("teachback")}
+              >
+                Teach-back
+              </button>
+              <button
+                type="button"
+                className={mode === "ask" ? undefined : "secondary"}
+                onClick={() => setMode("ask")}
+              >
+                Ask
+              </button>
+            </div>
+          )}
         </div>
       )}
       {textMode && !disabled && (
         <>
-          <label htmlFor="command">{prompt}</label>
+          <label htmlFor="command">
+            {mode === "ask" ? "Question about this file" : prompt}
+          </label>
           <textarea
             id="command"
             rows={3}
@@ -71,7 +100,7 @@ export function CommandBox({
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 if (canSend && !disabled) {
-                  onSend(text);
+                  onSend(text, mode);
                   setText("");
                 }
               }
@@ -82,19 +111,13 @@ export function CommandBox({
               type="button"
               disabled={disabled || !canSend}
               onClick={() => {
-                onSend(text);
+                onSend(text, mode);
                 setText("");
               }}
             >
-              Send
+              {mode === "ask" ? "Ask" : "Send"}
             </button>
           </div>
-          {phase === "file" && (
-            <p className="muted">
-              “Next”, “lgtm”, or a nod will not advance. Skip only if you are
-              stuck.
-            </p>
-          )}
         </>
       )}
     </div>
@@ -109,10 +132,7 @@ function promptFor(session: SessionSnapshot | null): string {
   if (session?.phase === "wrapup") {
     return "What does this PR do, why does it exist, and how do the pieces connect?";
   }
-  const name = session?.card?.lookCloser[0]?.name;
-  return name
-    ? `What does this file change, why, and what does ${name} do?`
-    : "What does this file change, and why was it needed?";
+  return "What does this file change, and why was it needed?";
 }
 
 function chipsFor(

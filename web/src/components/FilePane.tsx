@@ -165,6 +165,47 @@ export function FilePane({
             <div key={n}>
               <div className={classes || undefined} data-line={n}>
                 <span className="ln">{n}</span>
+                {(lookHere.length > 0 || uhHere.length > 0) && (
+                  <span className="gutter-marks">
+                    {lookHere.map((h) => (
+                      <button
+                        key={`look-${h.name}-${h.startLine}`}
+                        type="button"
+                        className="gutter-mark look"
+                        title={`${h.name} — ${h.why}`}
+                        aria-label={`Look closer: ${h.name}`}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onLookCloser(h);
+                        }}
+                      >
+                        ?
+                      </button>
+                    ))}
+                    {uhHere.map((u) => (
+                      <button
+                        key={`uh-${u.startLine}-${u.text}`}
+                        type="button"
+                        className="gutter-mark uh"
+                        title={u.text}
+                        aria-label={`Uh oh: ${u.text}`}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onLookCloser({
+                            name: "Uh oh",
+                            startLine: u.startLine,
+                            endLine: u.endLine,
+                            why: u.text,
+                          });
+                        }}
+                      >
+                        !
+                      </button>
+                    ))}
+                  </span>
+                )}
                 <span
                   className="line-src"
                   ref={isJump ? target : undefined}
@@ -172,47 +213,6 @@ export function FilePane({
                     if (header) onFunction(header);
                   }}
                 >
-                  {(lookHere.length > 0 || uhHere.length > 0) && (
-                    <span className="gutter-marks">
-                      {lookHere.map((h) => (
-                        <button
-                          key={`look-${h.name}-${h.startLine}`}
-                          type="button"
-                          className="gutter-mark look"
-                          title={`${h.name} — ${h.why}`}
-                          aria-label={`Look closer: ${h.name}`}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onLookCloser(h);
-                          }}
-                        >
-                          ?
-                        </button>
-                      ))}
-                      {uhHere.map((u) => (
-                        <button
-                          key={`uh-${u.startLine}-${u.text}`}
-                          type="button"
-                          className="gutter-mark uh"
-                          title={u.text}
-                          aria-label={`Uh oh: ${u.text}`}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onLookCloser({
-                              name: "Uh oh",
-                              startLine: u.startLine,
-                              endLine: u.endLine,
-                              why: u.text,
-                            });
-                          }}
-                        >
-                          !
-                        </button>
-                      ))}
-                    </span>
-                  )}
                   {notes[0] && (
                     <button
                       type="button"

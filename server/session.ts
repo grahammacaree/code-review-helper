@@ -7,6 +7,7 @@ import {
   generateFileCard,
   generateOverview,
   gradeTeachback,
+  answerFileQuestion,
 } from "./agent.js";
 import { runFunction } from "./probe.js";
 import { suggestArgs } from "./samples.js";
@@ -27,10 +28,12 @@ import {
 import {
   assetsNote,
   localThinTeachback,
+  looksLikeQuestion,
   noiseNote,
   walkQueue,
   wrapupFromCards,
 } from "./scaffold.js";
+import { readAllSessions, writeSession } from "./store.js";
 import type {
   Annotation,
   AnnotationKind,
@@ -83,6 +86,69 @@ interface Session {
 }
 
 const sessions = new Map<string, Session>();
+
+function persist(s: Session): void {
+  const { agent, cancel, fileText, diffText, busy, workingOn, ...rest } = s;
+  void writeSession(s.id, {
+    ...rest,
+    busy: false,
+    workingOn: undefined,
+  }).catch(() => undefined);
+}
+
+export async function restoreSessions(): Promise<void> {
+  for (const raw of await readAllSessions()) {
+    const s = hydrate(raw);
+    if (!s) continue;
+    if (s.card) {
+      try {
+        s.fileText = await readWorktreeFile(s.repoPath, s.card.path);
+        if (s.baseRef) {
+          s.diffText = await fileDiff(s.repoPath, s.baseRef, s.card.path);
+        }
+      } catch {
+        /* file may have moved */
+      }
+    }
+    sessions.set(s.id, s);
+  }
+}
+
+function hydrate(raw: unknown): Session | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Partial<Session>;
+  if (typeof o.id !== "string" || typeof o.repoPath !== "string") {
+    return undefined;
+  }
+  return {
+    id: o.id,
+    phase: o.phase ?? "overview",
+    repoPath: o.repoPath,
+    startingBranch: o.startingBranch ?? "",
+    prRef: o.prRef ?? "",
+    prUrl: o.prUrl,
+    prTitle: o.prTitle,
+    prBody: o.prBody,
+    baseRef: o.baseRef,
+    dirtyStatus: o.dirtyStatus,
+    large: o.large,
+    files: o.files ?? [],
+    queue: o.queue ?? [],
+    covered: o.covered ?? [],
+    overview: o.overview,
+    card: o.card,
+    cards: o.cards ?? [],
+    wrapup: o.wrapup,
+    teachback: o.teachback,
+    focusLine: o.focusLine,
+    messages: o.messages ?? [],
+    annotations: o.annotations ?? [],
+    probe: o.probe,
+    busy: false,
+    error: o.error,
+    paraphrasedCurrent: Boolean(o.paraphrasedCurrent),
+  };
+}
 
 function snapshot(s: Session): SessionSnapshot {
   return {
@@ -200,6 +266,7 @@ async function withBusy(
     s.busy = false;
     s.workingOn = undefined;
     s.cancel = undefined;
+    persist(s);
   }
   return snapshot(s);
 }
@@ -265,6 +332,7 @@ export async function startSession(input: {
     paraphrasedCurrent: false,
   };
   sessions.set(id, s);
+  persist(s);
   push(s, {
     role: "user",
     kind: "text",
@@ -277,6 +345,7 @@ export async function startSession(input: {
       kind: "dirty",
       text: `Working tree isn’t clean (${dirty}). Switch to a clean branch yourself, or stash and continue. The app will not checkout over dirty files unless you stash.`,
     });
+    persist(s);
     return snapshot(s);
   }
 
@@ -374,6 +443,7 @@ export async function chooseLarge(
       kind: "status",
       text: `Stopped. Starting branch was ${s.startingBranch}. Restore it if the tree is clean.`,
     });
+    persist(s);
     return snapshot(s);
   }
   return withBusy(s, async () => {
@@ -475,6 +545,20 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
   });
 }
 
+export async function askAboutFile(
+  id: string,
+  text: string,
+): Promise<SessionSnapshot> {
+  const s = get(id);
+  if (s.phase !== "file" && s.phase !== "wrapup") {
+    throw new Error("Open a file (or wrap-up) before asking.");
+  }
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error("Write a question first.");
+  push(s, { role: "user", kind: "text", text: trimmed });
+  return withBusy(s, () => replyToQuestion(s, trimmed));
+}
+
 export async function submitTeachback(
   id: string,
   text: string,
@@ -487,6 +571,10 @@ export async function submitTeachback(
   if (!trimmed) throw new Error("Write the paraphrase first.");
 
   push(s, { role: "user", kind: "text", text: trimmed });
+
+  if (looksLikeQuestion(trimmed)) {
+    return withBusy(s, () => replyToQuestion(s, trimmed));
+  }
 
   return withBusy(s, async () => {
     const result =
@@ -523,6 +611,22 @@ export async function submitTeachback(
         text: `That’s the walk. Starting branch was ${s.startingBranch}. Restore it if the tree is clean.`,
       });
     }
+  });
+}
+
+async function replyToQuestion(s: Session, text: string): Promise<void> {
+  const reply = await withAgent(s, (agent) =>
+    answerFileQuestion({
+      agent,
+      text,
+      card: s.card,
+      stage: s.phase === "wrapup" ? "wrapup" : "file",
+    }),
+  );
+  push(s, {
+    role: "assistant",
+    kind: "text",
+    text: reply,
   });
 }
 
@@ -723,6 +827,7 @@ export function resolveAnnotation(
     text: `Resolved ${annotation.kind} on ${annotation.path} L${annotation.startLine}–L${annotation.endLine}`,
     annotationId,
   });
+  persist(s);
   return snapshot(s);
 }
 
@@ -781,6 +886,7 @@ export async function cancelWork(id: string): Promise<SessionSnapshot> {
     // already closed
   }
   s.agent = undefined;
+  persist(s);
   return snapshot(s);
 }
 
@@ -795,5 +901,6 @@ export async function quit(id: string): Promise<SessionSnapshot> {
     kind: "status",
     text: `Stopped. Starting branch was ${s.startingBranch}. Restore it if the tree is clean.`,
   });
+  persist(s);
   return snapshot(s);
 }

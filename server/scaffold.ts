@@ -83,6 +83,14 @@ export function localThinTeachback(text: string): TeachbackResult | null {
   return null;
 }
 
+export function looksLikeQuestion(text: string): boolean {
+  const trimmed = text.trim();
+  if (/\?\s*$/.test(trimmed)) return true;
+  return /^(do we|do you|does |is there|are there|can we|could we|should we|how do|how does|what if|where is|where's)\b/i.test(
+    trimmed,
+  );
+}
+
 function wordCount(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }

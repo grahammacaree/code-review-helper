@@ -31,7 +31,7 @@ export function ChatColumn({
   onRepoPath: (value: string) => void;
   onPr: (value: string) => void;
   onCheckout: () => void;
-  onSend: (text: string) => void;
+  onSend: (text: string, mode: "ask" | "teachback") => void;
   onAction: (action: ChipAction) => void;
   onInterrupt: () => void;
   onLookCloser: (hotspot: LookCloser) => void;

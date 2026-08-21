@@ -1,38 +1,58 @@
 import type { ReactNode } from "react";
 
 const TOKEN =
-  /(`[^`]+`)|(\b(?:[\w.-]+\/)+[\w.-]+|\b[\w.-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|md|json|css|scss|svg|html|d\.ts)\b)/g;
+  /(`[^`]+`)|(\*\*[^*]+?\*\*)|(\b(?:[\w.-]+\/)+[\w.-]+|\b[\w.-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|md|json|css|scss|svg|html|d\.ts)\b)/g;
 
 export function Prose({ text }: { text: string }) {
   const trimmed = text.trim();
   if (!trimmed) return null;
-  const lines = trimmed.split("\n").map((line) => line.trim());
-  const bullets = lines.filter(Boolean);
-  if (bullets.length > 1 && bullets.every((line) => /^[-*•]/.test(line))) {
-    return (
-      <ul>
-        {bullets.map((line) => (
-          <li key={line}>{inline(line.replace(/^[-*•]\s*/, ""))}</li>
-        ))}
-      </ul>
-    );
+  const lines = trimmed.split("\n");
+  const nodes: ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) {
+      i += 1;
+      continue;
+    }
+    if (/^\s*[-*•]\s+/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\s*[-*•]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*[-*•]\s+/, ""));
+        i += 1;
+      }
+      nodes.push(
+        <ul key={key}>
+          {items.map((item, n) => (
+            <li key={n}>{inline(item)}</li>
+          ))}
+        </ul>,
+      );
+      key += 1;
+      continue;
+    }
+    if (/^\s*\d+[.)]\s+/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*\d+[.)]\s+/, ""));
+        i += 1;
+      }
+      nodes.push(
+        <ol key={key}>
+          {items.map((item, n) => (
+            <li key={n}>{inline(item)}</li>
+          ))}
+        </ol>,
+      );
+      key += 1;
+      continue;
+    }
+    nodes.push(<p key={key}>{inline(line.trim())}</p>);
+    key += 1;
+    i += 1;
   }
-  if (bullets.length > 1 && bullets.every((line) => /^\d+[.)]/.test(line))) {
-    return (
-      <ol>
-        {bullets.map((line) => (
-          <li key={line}>{inline(line.replace(/^\d+[.)]\s*/, ""))}</li>
-        ))}
-      </ol>
-    );
-  }
-  return (
-    <>
-      {lines.filter(Boolean).map((line, i) => (
-        <p key={i}>{inline(line)}</p>
-      ))}
-    </>
-  );
+  return <>{nodes}</>;
 }
 
 export function PathList({
@@ -99,8 +119,12 @@ function inline(text: string): ReactNode[] {
     const at = match.index ?? 0;
     if (at > last) nodes.push(text.slice(last, at));
     const raw = match[0];
-    const body = raw.startsWith("`") ? raw.slice(1, -1) : raw;
-    nodes.push(<code key={`${at}-${body}`}>{body}</code>);
+    if (raw.startsWith("**")) {
+      nodes.push(<strong key={`${at}-b`}>{inline(raw.slice(2, -2))}</strong>);
+    } else {
+      const body = raw.startsWith("`") ? raw.slice(1, -1) : raw;
+      nodes.push(<code key={`${at}-${body}`}>{body}</code>);
+    }
     last = at + raw.length;
   }
   if (last < text.length) nodes.push(text.slice(last));

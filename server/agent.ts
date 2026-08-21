@@ -298,7 +298,7 @@ export async function gradeTeachback(opts: {
   const run = await opts.agent.send(
     [
       opts.stage === "file"
-        ? `Grade this teach-back for ${opts.card?.path}. Require a paraphrase of what + why.${hotspot ? ` Cover Look closer by name: ${hotspot}.` : ""}`
+        ? `Grade this teach-back for ${opts.card?.path}. Pass if they explained what the file does and why it changed, in their own words, well enough to tell a teammate. Do not fail them for skipping Look closer names when the overall explanation is solid.${hotspot ? ` Mentioning ${hotspot} is a plus, not a gate.` : ""}`
         : "Grade the final PR summary: what it does, why it exists, how the pieces connect.",
       "Call grade_teachback once. adequate = could explain to a teammate. thin = stay. question_before = asked before paraphrasing. question_after = paraphrased then asked.",
       opts.card
@@ -347,6 +347,51 @@ export async function gradeTeachback(opts: {
   const result = await waitRun(run);
   if (!holder.value) {
     throw new Error(missingTool("grade_teachback", result));
+  }
+  return holder.value;
+}
+
+export async function answerFileQuestion(opts: {
+  agent: LocalAgent;
+  text: string;
+  card?: FileCard;
+  stage: "file" | "wrapup";
+}): Promise<string> {
+  const holder: { value?: string } = {};
+  const run = await opts.agent.send(
+    [
+      "Answer this reviewer question. Call publish_reply once.",
+      "Do not grade a teach-back. Do not demand a paraphrase in this reply.",
+      "End with one short line that teach-back is still required before advancing.",
+      opts.stage === "file" && opts.card
+        ? `Current file: ${opts.card.path}\nWhat: ${opts.card.what}\nWhy: ${opts.card.why}`
+        : "Stage: wrap-up of the whole PR.",
+      `Question:\n${opts.text}`,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+    {
+      local: {
+        customTools: {
+          publish_reply: {
+            description: "Publish the answer.",
+            inputSchema: {
+              type: "object",
+              properties: { text: { type: "string" } },
+              required: ["text"],
+            },
+            execute: (args) => {
+              holder.value = String(args.text);
+              return "Reply recorded. Stop.";
+            },
+          },
+        },
+      },
+    },
+  );
+  const result = await waitRun(run);
+  if (!holder.value) {
+    throw new Error(missingTool("publish_reply", result));
   }
   return holder.value;
 }

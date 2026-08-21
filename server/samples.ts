@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, basename } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { projectRoot } from "./env.js";
@@ -58,10 +58,10 @@ export async function suggestArgs(opts: {
     };
   }
 
-  const testHits = await grep(
+  const testHits = await findTestHits(
     opts.repoPath,
-    `${escapeRe(fn.name)}[[:space:]]*\\(`,
-    TEST_GLOBS,
+    opts.path,
+    fn.name,
     opts.signal,
   );
   const types = fn.params.flatMap(typeNames);
@@ -72,11 +72,33 @@ export async function suggestArgs(opts: {
     return {
       args: [fromCall, ...fallback.slice(1)],
       note: testHits[0]
-        ? `Sample argument from a test call (${rel(opts.repoPath, testHits[0].file)}:${testHits[0].line}).`
-        : "Sample argument from a test call.",
+        ? `Sample argument from a test (${rel(opts.repoPath, testHits[0].file)}:${testHits[0].line}).`
+        : "Sample argument from a test.",
       source: testHits[0]?.file,
       kind: "test",
     };
+  }
+
+  const typeName = types[0];
+  if (typeName) {
+    const typeHits = await findTestHits(
+      opts.repoPath,
+      opts.path,
+      typeName,
+      opts.signal,
+    );
+    const fromType = await sampleFromTypeFixture(typeName, typeHits, snippets);
+    if (fromType !== undefined) {
+      const hit = typeHits[0];
+      return {
+        args: [fromType, ...fallback.slice(1)],
+        note: hit
+          ? `Sample ${typeName} from ${rel(opts.repoPath, hit.file)}:${hit.line}.`
+          : `Sample ${typeName} from a test fixture.`,
+        source: hit?.file,
+        kind: "test",
+      };
+    }
   }
 
   let fixtureMiss: string | undefined;
@@ -165,6 +187,70 @@ interface GrepHit {
   text: string;
 }
 
+async function findTestHits(
+  repoPath: string,
+  srcPath: string,
+  needle: string,
+  signal?: AbortSignal,
+): Promise<GrepHit[]> {
+  const pattern = `\\b${escapeRe(needle)}\\b`;
+  const globHits = await grep(repoPath, pattern, TEST_GLOBS, signal);
+  const scoped =
+    globHits.length > 0
+      ? globHits
+      : (await grep(repoPath, pattern, [], signal)).filter((h) =>
+          isTestPath(h.file),
+        );
+  const local = await hitsInFiles(colocatedTests(repoPath, srcPath), needle);
+  return uniqueHits([...local, ...scoped]);
+}
+
+function isTestPath(file: string): boolean {
+  return (
+    /\.(test|spec)\.[cm]?[jt]sx?$/.test(file) || file.includes("/__tests__/")
+  );
+}
+
+function colocatedTests(repoPath: string, srcPath: string): string[] {
+  const dir = dirname(join(repoPath, srcPath));
+  const stem = basename(srcPath).replace(/\.[^.]+$/, "");
+  return [".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx"].flatMap((ext) => [
+    join(dir, `${stem}${ext}`),
+    join(dir, "__tests__", `${stem}${ext}`),
+  ]);
+}
+
+async function hitsInFiles(
+  files: string[],
+  needle: string,
+): Promise<GrepHit[]> {
+  const re = new RegExp(`\\b${escapeRe(needle)}\\b`);
+  const out: GrepHit[] = [];
+  for (const file of files) {
+    if (!existsSync(file)) continue;
+    const text = await readFile(file, "utf8");
+    const lines = text.split("\n");
+    lines.forEach((line, i) => {
+      if (re.test(line)) {
+        out.push({ file, line: i + 1, text: line });
+      }
+    });
+  }
+  return out;
+}
+
+function uniqueHits(hits: GrepHit[]): GrepHit[] {
+  const seen = new Set<string>();
+  const out: GrepHit[] = [];
+  for (const hit of hits) {
+    const key = `${hit.file}:${hit.line}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(hit);
+  }
+  return out;
+}
+
 function exportName(line: string): string | undefined {
   return line.match(
     /export\s+(?:async\s+)?(?:function|const)\s+([A-Za-z_$][\w$]*)/,
@@ -178,17 +264,15 @@ async function grep(
   signal?: AbortSignal,
 ): Promise<GrepHit[]> {
   try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["grep", "-n", "-E", "-I", pattern, "--", ...globs],
-      {
-        cwd: repoPath,
-        encoding: "utf8",
-        timeout: 15_000,
-        maxBuffer: 4 * 1024 * 1024,
-        signal,
-      },
-    );
+    const argv = ["grep", "-n", "-E", "-I", pattern];
+    if (globs.length > 0) argv.push("--", ...globs);
+    const { stdout } = await execFileAsync("git", argv, {
+      cwd: repoPath,
+      encoding: "utf8",
+      timeout: 15_000,
+      maxBuffer: 4 * 1024 * 1024,
+      signal,
+    });
     return parseGrep(repoPath, stdout);
   } catch (err) {
     if (signal?.aborted) throw err;
@@ -233,6 +317,11 @@ async function sampleFromTestCalls(
     ) {
       const value = evalLiteral(arg);
       if (value !== undefined && value !== null) return value;
+      continue;
+    }
+    if (/^[A-Za-z_$][\w$]*$/.test(arg)) {
+      const value = await resolveIdent(hit.file, arg, snippets);
+      if (value !== undefined && value !== null) return value;
     }
   }
   return undefined;
@@ -273,6 +362,73 @@ async function snippet(
     cache.set(key, "");
     return "";
   }
+}
+
+async function fileContents(
+  file: string,
+  cache: Map<string, string>,
+): Promise<string> {
+  const key = `file:${file}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+  try {
+    const text = await readFile(file, "utf8");
+    cache.set(key, text);
+    return text;
+  } catch {
+    cache.set(key, "");
+    return "";
+  }
+}
+
+async function resolveIdent(
+  file: string,
+  name: string,
+  cache: Map<string, string>,
+): Promise<unknown> {
+  const text = await fileContents(file, cache);
+  return objectAfterAssignment(text, name);
+}
+
+async function sampleFromTypeFixture(
+  typeName: string,
+  hits: GrepHit[],
+  snippets: Map<string, string>,
+): Promise<unknown> {
+  for (const hit of hits.slice(0, 20)) {
+    const text = await fileContents(hit.file, snippets);
+    const value = objectTypedAs(text, typeName);
+    if (value !== undefined && value !== null) return value;
+  }
+  return undefined;
+}
+
+function objectTypedAs(text: string, typeName: string): unknown {
+  const re = new RegExp(
+    `(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*:\\s*${escapeRe(typeName)}\\s*=\\s*`,
+  );
+  const m = re.exec(text);
+  if (!m || m.index === undefined) return undefined;
+  return objectAt(text, m.index + m[0].length);
+}
+
+function objectAfterAssignment(text: string, name: string): unknown {
+  const re = new RegExp(
+    `(?:const|let|var)\\s+${escapeRe(name)}(?:\\s*:\\s*[^=]+)?\\s*=\\s*`,
+  );
+  const m = re.exec(text);
+  if (!m || m.index === undefined) return undefined;
+  return objectAt(text, m.index + m[0].length);
+}
+
+function objectAt(text: string, start: number): unknown {
+  const ch = text[start];
+  if (ch !== "{" && ch !== "[") return undefined;
+  const close = ch === "{" ? "}" : "]";
+  const inner = takeBalanced(text, start, ch, close);
+  if (inner === undefined) return undefined;
+  if (/\.\.\./.test(inner)) return undefined;
+  return evalLiteral(`${ch}${inner}${close}`);
 }
 
 function firstArg(src: string, name: string): string | undefined {

@@ -58,6 +58,8 @@ export const api = {
   large: (id: string, choice: "quit" | "core" | "all", signal?: AbortSignal) =>
     post(id, "large", { choice }, signal),
   start: (id: string, signal?: AbortSignal) => post(id, "start", undefined, signal),
+  ask: (id: string, text: string, signal?: AbortSignal) =>
+    post(id, "ask", { text }, signal),
   teachback: (id: string, text: string, signal?: AbortSignal) =>
     post(id, "teachback", { text }, signal),
   next: (id: string, signal?: AbortSignal) => post(id, "next", undefined, signal),

@@ -7,9 +7,11 @@ const MIN_FILE = 180;
 export function InspectSplit({
   top,
   bottom,
+  expandTop,
 }: {
   top: ReactNode;
   bottom: ReactNode;
+  expandTop?: boolean;
 }) {
   const col = useRef<HTMLElement>(null);
   const drag = useRef<{ y: number; h: number } | null>(null);
@@ -23,10 +25,13 @@ export function InspectSplit({
   return (
     <aside
       ref={col}
-      className="inspect-column"
+      className={`inspect-column${expandTop ? " expand-map" : ""}`}
       aria-label="Repository and file"
     >
-      <div className="repo-map-slot" style={{ height: mapH }}>
+      <div
+        className="repo-map-slot"
+        style={expandTop ? undefined : { height: mapH }}
+      >
         {top}
       </div>
       <div

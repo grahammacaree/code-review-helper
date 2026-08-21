@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { api, createSession, getAuth } from "./api";
+import { api, createSession, getAuth, getSession } from "./api";
 import { ChatColumn } from "./components/ChatColumn";
 import type { ChipAction } from "./components/CommandBox";
 import { FileInspect, type FileTab } from "./components/FileInspect";
 import { InspectSplit } from "./components/InspectSplit";
 import { RepoMap } from "./components/RepoMap";
-import { loadRecentRepos, rememberRepo, displayRepo } from "./recents";
+import { loadRecentRepos, rememberRepo, displayRepo, loadSessionId, rememberSession, forgetSession } from "./recents";
 import type { AuthStatus, LookCloser, SessionSnapshot } from "./types";
 
 export function App() {
@@ -29,6 +29,40 @@ export function App() {
       .catch((err: unknown) =>
         setError(err instanceof Error ? err.message : String(err)),
       );
+  }, []);
+
+  useEffect(() => {
+    const id = loadSessionId();
+    if (!id) return;
+    let cancelled = false;
+    void (async () => {
+      for (let attempt = 0; attempt < 6 && !cancelled; attempt += 1) {
+        try {
+          const snap = await getSession(id);
+          if (cancelled) return;
+          rememberSession(snap.id);
+          setSession(snap);
+          setRepoPath(displayRepo(snap.repoPath));
+          setPr(snap.prUrl || snap.prRef);
+          return;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const gone = /unknown session/i.test(msg);
+          if (gone && attempt === 0) {
+            await new Promise((r) => setTimeout(r, 400));
+            continue;
+          }
+          if (gone) {
+            forgetSession();
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -64,7 +98,9 @@ export function App() {
     setBusy(true);
     setError(null);
     try {
-      setSession(await fn(ac.signal));
+      const snap = await fn(ac.signal);
+      rememberSession(snap.id);
+      setSession(snap);
     } catch (err) {
       if (ac.signal.aborted) {
         setError(null);
@@ -100,13 +136,18 @@ export function App() {
     );
   }
 
-  function onSend(text: string) {
+  function onSend(text: string, mode: "ask" | "teachback") {
     if (!session) return;
-    void run((signal) => api.teachback(session.id, text, signal));
+    void run((signal) =>
+      mode === "ask"
+        ? api.ask(session.id, text, signal)
+        : api.teachback(session.id, text, signal),
+    );
   }
 
   function onAction(action: ChipAction) {
     if (action === "reset") {
+      forgetSession();
       setSession(null);
       setError(null);
       return;
@@ -152,6 +193,7 @@ export function App() {
         onLookCloser={onLookCloser}
       />
       <InspectSplit
+        expandTop={!session?.card}
         top={
           <RepoMap
             files={session?.files ?? []}

@@ -96,7 +96,10 @@ export function FileInspect({
   }
 
   return (
-    <section className="file-inspect" aria-label="Current file">
+    <section
+      className={card ? "file-inspect" : "file-inspect empty"}
+      aria-label="Current file"
+    >
       <header className="file-inspect-head">
         <h2 title={card?.path}>
           {card ? (
@@ -131,17 +134,16 @@ export function FileInspect({
           </button>
         </div>
       </header>
-      <div
-        className="file-inspect-body"
-        role="tabpanel"
-        id="file-view-panel"
-        aria-labelledby={tab === "diff" ? "tab-diff" : "tab-file"}
-      >
-        {!card ? (
-          <p className="muted">The current queue file will open here.</p>
-        ) : tab === "diff" ? (
-          <DiffPane path={card.path} diff={diffText} />
-        ) : (
+      {card ? (
+        <div
+          className="file-inspect-body"
+          role="tabpanel"
+          id="file-view-panel"
+          aria-labelledby={tab === "diff" ? "tab-diff" : "tab-file"}
+        >
+          {tab === "diff" ? (
+            <DiffPane path={card.path} diff={diffText} />
+          ) : (
           <FilePane
             path={card.path}
             kind={card.kind}
@@ -261,7 +263,8 @@ export function FileInspect({
             }
           />
         )}
-      </div>
+        </div>
+      ) : null}
 
       {fn && (
         <form

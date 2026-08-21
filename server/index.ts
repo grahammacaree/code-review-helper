@@ -12,12 +12,14 @@ import {
   cancelWork,
   replyAnnotation,
   resolveAnnotation,
+  restoreSessions,
   restoreBranch,
   skipFile,
   stashAndContinue,
   startFiles,
   startSession,
   submitTeachback,
+  askAboutFile,
 } from "./session.js";
 
 const app = express();
@@ -87,6 +89,15 @@ app.post("/api/sessions/:id/large", async (req, res) => {
 app.post("/api/sessions/:id/start", async (req, res) => {
   try {
     res.json(await startFiles(sessionId(req)));
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/api/sessions/:id/ask", async (req, res) => {
+  try {
+    const text = (req.body as { text?: string }).text ?? "";
+    res.json(await askAboutFile(sessionId(req), text));
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
   }
@@ -221,6 +232,8 @@ app.post("/api/sessions/:id/probe", async (req, res) => {
   }
 });
 
-app.listen(serverPort(), () => {
-  console.log(`Walkthrough API on http://127.0.0.1:${serverPort()}`);
+void restoreSessions().then(() => {
+  app.listen(serverPort(), () => {
+    console.log(`Walkthrough API on http://127.0.0.1:${serverPort()}`);
+  });
 });

@@ -43,7 +43,7 @@ export function Transcript({
           ) : msg.kind === "dirty" || msg.kind === "status" || msg.kind === "probe" ? (
             <pre className="bubble-pre">{msg.text}</pre>
           ) : (
-            <p>{msg.text}</p>
+            <Prose text={msg.text} />
           )}
         </article>
       ))}

@@ -21,6 +21,7 @@
   --uh-bar: #e8590c;
   --look-mark: #eac54f;
   --code-inset: 16px;
+  --mark-col: 32px;
   --user-bubble: #ddf4ff;
   --text: 13px;
   --label: 12px;
@@ -247,7 +248,6 @@ a {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  margin-bottom: 0.6rem;
 }
 
 .work-row .spinner {
@@ -326,6 +326,10 @@ a {
   border-radius: 4px;
 }
 
+.bubble strong {
+  font-weight: 650;
+}
+
 button.hotspot code {
   background: transparent;
   padding: 0;
@@ -351,6 +355,26 @@ button.hotspot code {
   border-top: 1px solid var(--line);
   padding: var(--pad);
   background: var(--bg-2);
+}
+
+.command-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.command-bar:not(:last-child) {
+  margin-bottom: 0.5rem;
+}
+
+.command-bar .chips {
+  margin-bottom: 0;
+}
+
+.command-mode {
+  margin-left: auto;
 }
 
 .chips,
@@ -405,6 +429,27 @@ textarea:focus {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.inspect-column.expand-map .repo-map-slot {
+  flex: 1;
+}
+
+.inspect-column.expand-map .inspect-split {
+  display: none;
+}
+
+.inspect-column.expand-map .file-inspect {
+  flex: 0 0 auto;
+}
+
+.inspect-column.expand-map .file-inspect-body {
+  display: none;
+}
+
+.file-inspect.empty .file-inspect-head {
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
 }
 
 .repo-map-slot .repo-map {
@@ -561,7 +606,8 @@ textarea:focus {
 .code [data-line] {
   display: block;
   position: relative;
-  padding: 0 var(--code-inset) 0 calc(var(--code-inset) + 3px);
+  padding: 0 var(--code-inset) 0
+    calc(var(--mark-col) + var(--code-inset) + 3px);
 }
 
 .code .ln {
@@ -577,18 +623,20 @@ textarea:focus {
 
 .gutter-marks {
   position: absolute;
-  left: 1px;
+  left: 2px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
   gap: 2px;
+  width: var(--mark-col);
+  justify-content: flex-end;
   z-index: 1;
 }
 
 .code .hit,
 .code .noted {
   background: var(--hit);
-  box-shadow: inset var(--code-inset) 0 0 var(--bg),
+  box-shadow: inset calc(var(--mark-col) + var(--code-inset)) 0 0 var(--bg),
     inset calc(-1 * var(--code-inset)) 0 0 var(--bg);
 }
 
@@ -598,15 +646,15 @@ textarea:focus {
 
 .code .look-range {
   background: var(--look);
-  box-shadow: inset var(--code-inset) 0 0 var(--bg),
-    inset calc(var(--code-inset) + 3px) 0 0 var(--look-mark),
+  box-shadow: inset calc(var(--mark-col) + var(--code-inset)) 0 0 var(--bg),
+    inset calc(var(--mark-col) + var(--code-inset) + 3px) 0 0 var(--look-mark),
     inset calc(-1 * var(--code-inset)) 0 0 var(--bg);
 }
 
 .code .uh-range {
   background: var(--uh);
-  box-shadow: inset var(--code-inset) 0 0 var(--bg),
-    inset calc(var(--code-inset) + 3px) 0 0 var(--uh-bar),
+  box-shadow: inset calc(var(--mark-col) + var(--code-inset)) 0 0 var(--bg),
+    inset calc(var(--mark-col) + var(--code-inset) + 3px) 0 0 var(--uh-bar),
     inset calc(-1 * var(--code-inset)) 0 0 var(--bg);
 }
 
@@ -614,7 +662,7 @@ textarea:focus {
   display: inline-flex;
   width: 14px;
   height: 14px;
-  margin-right: 0.2rem;
+  margin-right: 0;
   padding: 0;
   border: 0;
   border-radius: 2px;
@@ -696,7 +744,8 @@ button.hotspot {
 }
 
 .inline-composer {
-  margin: 0.35rem var(--code-inset) 0.35rem calc(var(--code-inset) + 3px);
+  margin: 0.35rem var(--code-inset) 0.35rem
+    calc(var(--mark-col) + var(--code-inset) + 3px);
   white-space: normal;
   font-family: inherit;
   font-size: var(--text);
