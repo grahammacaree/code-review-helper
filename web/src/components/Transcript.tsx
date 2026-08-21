@@ -219,8 +219,8 @@ function WrapupBody({ wrapup }: { wrapup: Wrapup }) {
       <p className="muted">
         In your own words: what does this PR do, why does it exist, and how do
         the pieces connect? When you are ready, use{" "}
-        <strong>Copy review notes</strong> below to paste uh-ohs and inline
-        notes into a GitHub review.
+        <strong>Copy review notes</strong> below for the GitHub review where
+        your approval actually lands.
       </p>
     </>
   );

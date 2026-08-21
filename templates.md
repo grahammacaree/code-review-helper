@@ -176,5 +176,9 @@ That’s the idea.
 
 Want me to check out `[starting-branch]` again?
 
+If you are ready to approve or request changes on GitHub, take your notes
+(uh-ohs, open questions) with you — do not treat this walk as the review
+submission itself.
+
 If you want a defect pass next, say so. I won’t start one unless you ask.
 ```

@@ -11,7 +11,9 @@ description: >-
 
 # PR file walkthrough
 
-Teach the change set. This is not a defect hunt and not a ship checklist.
+Teach the change set so the reviewer’s approval is earned, not skimmed.
+This is not an automated defect hunt and not a ship checklist — but it
+**is** preparation for the real GitHub approve / request-changes step.
 
 Stay read-only on **code and review comments**. Do not post GitHub review
 comments, push, or fix code unless they explicitly ask. **Exception:**
