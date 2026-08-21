@@ -797,6 +797,24 @@ button.hotspot {
   margin: 0 0 0.4rem;
 }
 
+.notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.notes-head h3,
+.notes-head p {
+  margin: 0;
+}
+
+.notes-collapsed {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .notes ul {
   list-style: none;
   margin: 0;

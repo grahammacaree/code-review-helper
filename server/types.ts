@@ -157,6 +157,7 @@ export interface SessionSnapshot {
   phase: Phase;
   repoPath: string;
   startingBranch: string;
+  homeBranch?: string;
   prRef: string;
   prUrl?: string;
   baseRef?: string;

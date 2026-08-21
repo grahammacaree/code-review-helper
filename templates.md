@@ -86,13 +86,13 @@ until then.
 Before we continue: in your own words, what does this file change do, and why was it needed? Reply with that (or questions). Say **next** only after you’ve explained it — I won’t advance on “next” alone.
 ```
 
-When Look closer is not none, replace the last paragraph with:
+When Look closer is not none, you **may** add a nudge toward the hotspot (still not a hard gate):
 
 ```markdown
-Before we continue: in your own words, what does this file change do, and why was it needed? Also: what does `[Name]` (around L[n]) do, and why is it shaped that way? Reply with that (or questions). Say **next** only after you’ve explained it — I won’t advance on “next” alone.
+Before we continue: in your own words, what does this file change do, and why was it needed? If it helps, say what `[Name]` (around L[n]) does — naming it is a plus, not required if the file-level explanation is solid. Reply with that (or questions). Say **next** only after you’ve explained it — I won’t advance on “next” alone.
 ```
 
-If a Map was shown, add: how do those pieces fit together?
+If a Map was shown, you may invite how those pieces fit together in the same paraphrase — still optional depth, not a second gate.
 
 When Look closer is none, keep the first teach-back paragraph.
 

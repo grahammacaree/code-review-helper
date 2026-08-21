@@ -57,7 +57,7 @@ export function Prose({ text }: { text: string }) {
 
 export function PathList({
   items,
-  empty = "none",
+  empty = "None.",
 }: {
   items: string[];
   empty?: string;
@@ -75,7 +75,7 @@ export function PathList({
 }
 
 export function NoteList({ items }: { items: string[] }) {
-  if (!items.length) return <p>none</p>;
+  if (!items.length) return <p>None.</p>;
   return (
     <ul>
       {items.map((item) => (

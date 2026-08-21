@@ -72,6 +72,28 @@ export async function currentBranch(cwd: string): Promise<string> {
   return (await git(cwd, ["branch", "--show-current"])).trim();
 }
 
+/** Repo default branch (origin/HEAD), not the PR base — stacked PRs base on stack parents. */
+export async function defaultBranch(cwd: string): Promise<string> {
+  try {
+    const ref = (
+      await git(cwd, ["symbolic-ref", "refs/remotes/origin/HEAD"])
+    ).trim();
+    const name = ref.match(/refs\/remotes\/origin\/(.+)$/)?.[1];
+    if (name) return name;
+  } catch {
+    /* fall through */
+  }
+  for (const candidate of ["main", "master"]) {
+    try {
+      await git(cwd, ["rev-parse", "--verify", `--quiet`, candidate]);
+      return candidate;
+    } catch {
+      /* try next */
+    }
+  }
+  return "main";
+}
+
 export async function porcelainStatus(cwd: string): Promise<string> {
   return (await git(cwd, ["status", "--porcelain"])).trim();
 }

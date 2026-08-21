@@ -137,7 +137,7 @@ function FileBody({
       <PathList items={links.upcoming} />
       <h3>Look closer</h3>
       {card.lookCloser.length === 0 ? (
-        <p>none</p>
+        <p>None.</p>
       ) : (
         <ul>
           {card.lookCloser.map((h) => (
@@ -165,7 +165,7 @@ function FileBody({
       <NoteList items={card.couldHave} />
       <h3>Uh oh</h3>
       {card.uhOh.length === 0 ? (
-        <p>none</p>
+        <p>None.</p>
       ) : (
         <ul>
           {card.uhOh.map((u) => (
@@ -215,7 +215,9 @@ function WrapupBody({ wrapup }: { wrapup: Wrapup }) {
       )}
       <p className="muted">
         In your own words: what does this PR do, why does it exist, and how do
-        the pieces connect?
+        the pieces connect? When you are ready, use{" "}
+        <strong>Copy review notes</strong> below to paste uh-ohs and inline
+        notes into a GitHub review.
       </p>
     </>
   );

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { reviewNotesMarkdown } from "../exportNotes";
 import type { Phase, SessionSnapshot } from "../types";
 
 export type ChipAction =
@@ -27,11 +28,25 @@ export function CommandBox({
 }) {
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"ask" | "teachback">("teachback");
+  const [copied, setCopied] = useState(false);
   const phase = session?.phase;
   const textMode = canSubmitText(phase);
   const canSend = textMode && text.trim().length > 0;
   const chips = chipsFor(session);
   const prompt = textMode ? promptFor(session) : undefined;
+  const canExport = phase === "wrapup" || phase === "done";
+
+  async function copyNotes() {
+    if (!session) return;
+    const md = reviewNotesMarkdown(session);
+    try {
+      await navigator.clipboard.writeText(md);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
     <div className="command-box">
@@ -44,7 +59,7 @@ export function CommandBox({
           </button>
         </div>
       )}
-      {!disabled && (chips.length > 0 || textMode) && (
+      {!disabled && (chips.length > 0 || textMode || canExport) && (
         <div className="command-bar">
           {chips.length > 0 && (
             <div className="chips" role="group" aria-label="Walkthrough actions">
@@ -60,6 +75,16 @@ export function CommandBox({
                 </button>
               ))}
             </div>
+          )}
+          {canExport && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={disabled}
+              onClick={() => void copyNotes()}
+            >
+              {copied ? "Copied" : "Copy review notes"}
+            </button>
           )}
           {textMode && (
             <div
@@ -170,7 +195,7 @@ function chipsFor(
       return [
         {
           action: "restore",
-          label: `Restore ${session.startingBranch}`,
+          label: `Restore ${session.homeBranch || "main"}`,
           primary: true,
         },
         { action: "reset", label: "New walkthrough" },

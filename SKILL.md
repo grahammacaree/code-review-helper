@@ -281,17 +281,18 @@ If **Look closer** is not none and the host can open files, jump to the
 first hotspot’s line range (`#L<start>` or `#L<start>-L<end>`) as well as
 the file’s Focus ranges.
 
-End every file turn with the teach-back prompt from [templates.md](templates.md). If Look closer named hotspots, the prompt must ask about those **by name** (and may point at the line range). If a Map was given, they should be able to say how the pieces connect — still the Look closer gate, not a new section. Do not advance until they can explain what those hotspots do, not only the file’s job.
+End every file turn with the teach-back prompt from [templates.md](templates.md). Require a paraphrase of **what** + **why** solid enough to tell a teammate. If Look closer named hotspots, **prefer** asking about them by name (and may point at the line range) — naming them is a plus, not a hard gate when the file-level explanation is already solid. If a Map was given, how the pieces connect is welcome in the same paraphrase, not a separate gate. Do not advance on “next” / “lgtm” alone.
 
 ## Teach-back gate (hard blocker)
 
 Do **not** advance on “next”, “ok”, “lgtm”, or emoji alone.
 
-**Per file:** require a real paraphrase of **what** + **why**. If Look
-closer named hotspots, they must cover those by name (line ranges help
-them find the spot; they need not recite numbers). If a Map was shown,
-connections among those pieces should show up in the paraphrase.
-Connections to other files are optional but encouraged.
+**Per file:** require a real paraphrase of **what** + **why**. Look
+closer names (and Map connections, when shown) are a **plus**, not a
+hard requirement — pass a solid file-level explanation even if they do
+not recite hotspot names. Line ranges are there so they can find the
+spot when they want to dig in. Connections to other files are optional
+but encouraged.
 
 **Final:** require a real paraphrase of the whole PR — what it does, why
 it exists, and how the pieces connect (dependencies + call chain).
@@ -308,11 +309,9 @@ it exists, and how the pieces connect (dependencies + call chain).
   the walkthrough.)
 
 “Good enough” means they could explain it to a teammate, not that they
-recited the card. If Look closer named a function because of an
-invariant or contract, a paraphrase that never touches that piece is
-thin — still the existing gate, not a new one. Do not require them to
-cover Could have, Uh oh, or review-checklist items that were not in
-the card.
+recited the card. Do not fail a solid what/why only because Look closer
+names were skipped. Do not require them to cover Could have, Uh oh, or
+review-checklist items that were not in the card.
 
 ## Wrap-up (final teach-back)
 

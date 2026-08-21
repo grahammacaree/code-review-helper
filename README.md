@@ -78,7 +78,7 @@ API: http://127.0.0.1:8787
 
 You need `git` and ideally `gh` on `PATH`. Point the form at a **local clone** and a PR URL or number. The app checks out the PR tip in that repo (clean tree first). Prefer running the app from a projects checkout, not from `~/.cursor/skills/`, if you want that skills folder to stay lean.
 
-Walks persist across refresh and server restart (`data/sessions/`, gitignored; the browser remembers the session id). **New File** / **Reset** starts over. The function probe looks for Jest/spec samples and typed fixtures (`const foo: Type = { … }`), not only inline literals.
+Walks persist across refresh and server restart (`data/sessions/`, gitignored; the browser remembers the session id). **New File** / **Reset** starts over. The function probe looks for Jest/spec samples and typed fixtures (`const foo: Type = { … }`), not only inline literals. At wrap-up (and when done), **Copy review notes** puts lingering uh-ohs, design forks, and your inline questions/comments on the clipboard as Markdown for pasting into a GitHub review.
 
 ## What it is not
 

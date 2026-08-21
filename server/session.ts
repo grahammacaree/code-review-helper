@@ -17,6 +17,7 @@ import {
   checkoutPr,
   confirmHead,
   currentBranch,
+  defaultBranch,
   fileDiff,
   isGitRepo,
   largePrGate,
@@ -56,6 +57,7 @@ interface Session {
   phase: Phase;
   repoPath: string;
   startingBranch: string;
+  homeBranch: string;
   prRef: string;
   prUrl?: string;
   prTitle?: string;
@@ -100,6 +102,11 @@ export async function restoreSessions(): Promise<void> {
   for (const raw of await readAllSessions()) {
     const s = hydrate(raw);
     if (!s) continue;
+    try {
+      s.homeBranch = await defaultBranch(s.repoPath);
+    } catch {
+      s.homeBranch = s.homeBranch || "main";
+    }
     if (s.card) {
       try {
         s.fileText = await readWorktreeFile(s.repoPath, s.card.path);
@@ -125,6 +132,7 @@ function hydrate(raw: unknown): Session | undefined {
     phase: o.phase ?? "overview",
     repoPath: o.repoPath,
     startingBranch: o.startingBranch ?? "",
+    homeBranch: o.homeBranch || "main",
     prRef: o.prRef ?? "",
     prUrl: o.prUrl,
     prTitle: o.prTitle,
@@ -156,6 +164,7 @@ function snapshot(s: Session): SessionSnapshot {
     phase: s.phase,
     repoPath: s.repoPath,
     startingBranch: s.startingBranch,
+    homeBranch: s.homeBranch,
     prRef: s.prRef,
     prUrl: s.prUrl,
     baseRef: s.baseRef,
@@ -307,6 +316,7 @@ export async function startSession(input: {
   }
 
   const startingBranch = await currentBranch(repoPath);
+  const homeBranch = await defaultBranch(repoPath);
   let dirty = await porcelainStatus(repoPath);
   if (dirty && input.allowStash) {
     await stash(repoPath);
@@ -319,6 +329,7 @@ export async function startSession(input: {
     phase: dirty ? "blocked_dirty" : "overview",
     repoPath,
     startingBranch,
+    homeBranch,
     prRef: parsed.number,
     prUrl: parsed.url,
     dirtyStatus: dirty || undefined,
@@ -441,7 +452,7 @@ export async function chooseLarge(
     push(s, {
       role: "assistant",
       kind: "status",
-      text: `Stopped. Starting branch was ${s.startingBranch}. Restore it if the tree is clean.`,
+      text: `Stopped. Restore ${restoreTarget(s)} if the tree is clean.`,
     });
     persist(s);
     return snapshot(s);
@@ -608,7 +619,7 @@ export async function submitTeachback(
       push(s, {
         role: "assistant",
         kind: "status",
-        text: `That’s the walk. Starting branch was ${s.startingBranch}. Restore it if the tree is clean.`,
+        text: `That’s the walk. Restore ${restoreTarget(s)} if the tree is clean.`,
       });
     }
   });
@@ -672,24 +683,31 @@ export async function skipFile(id: string): Promise<SessionSnapshot> {
   });
 }
 
+function restoreTarget(s: Session): string {
+  // Stacked PRs base on a parent feature branch; send them home to the
+  // repo default (usually main), not the PR base.
+  return s.homeBranch || "main";
+}
+
 export async function restoreBranch(
   id: string,
 ): Promise<SessionSnapshot> {
   const s = get(id);
+  const branch = restoreTarget(s);
   push(s, {
     role: "user",
     kind: "text",
-    text: `Restore ${s.startingBranch}`,
+    text: `Restore ${branch}`,
   });
   return withBusy(s, async () => {
-    await checkoutBranch(s.repoPath, s.startingBranch);
+    await checkoutBranch(s.repoPath, branch);
     s.phase = "done";
     await s.agent?.close();
     s.agent = undefined;
     push(s, {
       role: "assistant",
       kind: "status",
-      text: `Back on ${s.startingBranch}.`,
+      text: `Back on ${branch}.`,
     });
   });
 }
@@ -899,7 +917,7 @@ export async function quit(id: string): Promise<SessionSnapshot> {
   push(s, {
     role: "assistant",
     kind: "status",
-    text: `Stopped. Starting branch was ${s.startingBranch}. Restore it if the tree is clean.`,
+    text: `Stopped. Restore ${restoreTarget(s)} if the tree is clean.`,
   });
   persist(s);
   return snapshot(s);

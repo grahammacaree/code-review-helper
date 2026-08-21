@@ -72,6 +72,7 @@ export function FileInspect({
     ProbeArgSuggestion["kind"] | "loading" | null
   >(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [notesHidden, setNotesHidden] = useState(false);
   const sampleGen = useRef(0);
   const sampleAbort = useRef<AbortController | null>(null);
 
@@ -84,10 +85,21 @@ export function FileInspect({
     setSampleNote(null);
     setSampleKind(null);
     setOpenId(null);
+    setNotesHidden(false);
   }, [card?.path]);
 
   const here = annotations.filter((a) => a.path === card?.path);
   const openNote = here.find((a) => a.id === openId);
+
+  function showNote(id: string) {
+    setNotesHidden(false);
+    setOpenId(id);
+  }
+
+  function hideNotes() {
+    setOpenId(null);
+    setNotesHidden(true);
+  }
 
   function dismissDraft() {
     window.getSelection()?.removeAllRanges();
@@ -196,7 +208,7 @@ export function FileInspect({
                   );
                 });
             }}
-            onOpenAnnotation={setOpenId}
+            onOpenAnnotation={showNote}
             composerAfter={sel?.endLine}
             composer={
               sel ? (
@@ -342,16 +354,33 @@ export function FileInspect({
         </form>
       )}
 
-      {here.length > 0 && (
+      {here.length > 0 && notesHidden && (
+        <div className="notes notes-collapsed">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => setNotesHidden(false)}
+          >
+            Show notes ({here.length})
+          </button>
+        </div>
+      )}
+
+      {here.length > 0 && !notesHidden && (
         <div className="notes">
-          <h3>Notes on this file</h3>
+          <div className="notes-head">
+            <h3>Notes on this file</h3>
+            <button type="button" className="secondary" onClick={hideNotes}>
+              Hide
+            </button>
+          </div>
           <ul>
             {here.map((a) => (
               <li key={a.id} className={a.status}>
                 <button
                   type="button"
                   className="hotspot"
-                  onClick={() => setOpenId(a.id)}
+                  onClick={() => showNote(a.id)}
                 >
                   {a.kind} L{a.startLine}–L{a.endLine}
                   {a.status === "resolved" ? " · resolved" : ""}
@@ -372,12 +401,21 @@ export function FileInspect({
         </div>
       )}
 
-      {openNote && (
+      {openNote && !notesHidden && (
         <div className="note-thread">
-          <p>
-            <strong>{openNote.kind}</strong> L{openNote.startLine}–L
-            {openNote.endLine}
-          </p>
+          <div className="notes-head">
+            <p>
+              <strong>{openNote.kind}</strong> L{openNote.startLine}–L
+              {openNote.endLine}
+            </p>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setOpenId(null)}
+            >
+              Close
+            </button>
+          </div>
           <p>{openNote.body}</p>
           {openNote.replies.map((r) => (
             <p key={r.id} className="muted">
