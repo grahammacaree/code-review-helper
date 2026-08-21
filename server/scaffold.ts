@@ -1,3 +1,4 @@
+import { scoreChangedFiles, RISK_PIN_SCORE } from "./risk.js";
 import type {
   FileCard,
   FileEntry,
@@ -20,18 +21,37 @@ export function orderQueue(files: FileEntry[]): string[] {
     .map((f) => f.path);
 }
 
-export function walkQueue(
-  files: FileEntry[],
-  mode: "all" | "core",
-): { queue: string[]; batched: string[] } {
-  const ordered = orderQueue(files);
-  if (mode !== "core" || ordered.length <= CORE_LIMIT) {
-    return { queue: ordered, batched: [] };
+export async function walkQueue(opts: {
+  files: FileEntry[];
+  mode: "all" | "core";
+  repoPath: string;
+  baseRef: string;
+  signal?: AbortSignal;
+}): Promise<{
+  queue: string[];
+  batched: string[];
+  riskPinned: string[];
+}> {
+  const ordered = orderQueue(opts.files);
+  if (opts.mode !== "core" || ordered.length <= CORE_LIMIT) {
+    return { queue: ordered, batched: [], riskPinned: [] };
   }
-  return {
-    queue: ordered.slice(0, CORE_LIMIT),
-    batched: ordered.slice(CORE_LIMIT),
-  };
+
+  const spine = ordered.slice(0, CORE_LIMIT);
+  const hits = await scoreChangedFiles({
+    repoPath: opts.repoPath,
+    baseRef: opts.baseRef,
+    files: opts.files,
+    signal: opts.signal,
+  });
+  const riskPinned = hits
+    .filter((h) => h.score >= RISK_PIN_SCORE && !spine.includes(h.path))
+    .map((h) => h.path);
+
+  const queue = [...spine, ...riskPinned];
+  const queued = new Set(queue);
+  const batched = ordered.filter((p) => !queued.has(p));
+  return { queue, batched, riskPinned };
 }
 
 export function assetsNote(files: FileEntry[]): string | undefined {
@@ -43,10 +63,16 @@ export function assetsNote(files: FileEntry[]): string | undefined {
 export function noiseNote(
   files: FileEntry[],
   batched: string[],
+  riskPinned: string[] = [],
 ): string | undefined {
   const bits: string[] = [];
   const noise = files.filter((f) => f.noise).map((f) => f.path);
   if (noise.length) bits.push(`noise: ${noise.join(", ")}`);
+  if (riskPinned.length) {
+    bits.push(
+      `added to queue for risk signals: ${riskPinned.join(", ")}`,
+    );
+  }
   if (batched.length) bits.push(`batched (core only): ${batched.join(", ")}`);
   return bits.length ? bits.join(". ") : undefined;
 }

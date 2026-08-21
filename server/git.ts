@@ -293,6 +293,33 @@ export async function fileDiff(
   return out;
 }
 
+/** path → { added, deleted } for the PR range. */
+export async function diffNumstat(
+  cwd: string,
+  baseRef: string,
+  signal?: AbortSignal,
+): Promise<Map<string, { added: number; deleted: number }>> {
+  const range = `origin/${baseRef}...HEAD`;
+  let out: string;
+  try {
+    out = await git(cwd, ["diff", "--numstat", range], signal);
+  } catch {
+    out = await git(cwd, ["diff", "--numstat", `${baseRef}...HEAD`], signal);
+  }
+  const map = new Map<string, { added: number; deleted: number }>();
+  for (const line of out.split("\n")) {
+    if (!line.trim()) continue;
+    const parts = line.split("\t");
+    if (parts.length < 3) continue;
+    const added = parts[0] === "-" ? 0 : Number(parts[0]);
+    const deleted = parts[1] === "-" ? 0 : Number(parts[1]);
+    const path = parts[parts.length - 1];
+    if (!path || !Number.isFinite(added) || !Number.isFinite(deleted)) continue;
+    map.set(path, { added, deleted });
+  }
+  return map;
+}
+
 export function parseFocusFromDiff(diff: string): { start: number; end: number }[] {
   const raw: { start: number; end: number }[] = [];
   for (const match of diff.matchAll(

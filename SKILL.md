@@ -128,10 +128,13 @@ Then **stop** before the overview. Report the counts. Offer exactly:
   starting branch.
 - **Core only** — propose at most **8** load-bearing files (the ones
   needed to explain the PR: types/config → core logic → a caller →
-  tests if they change behavior). If the spine is bigger, pick 8 and
-  say what you left out. List the rest as batched. Teach-back still
-  applies to every file in that shortened queue, plus the final
-  summary.
+  tests if they change behavior), **then append** any other changed
+  files whose diffs look high-risk (auth/secrets/exec/`innerHTML`/
+  removed guards, sensitive paths, huge non-test churn, etc.). The
+  queue may grow past 8 for those pins — do not batch a file that
+  looks like a real bug or antipattern. List remaining low-risk paths
+  as batched. Teach-back still applies to every file in the queue,
+  plus the final summary.
 - **Walk all** — full queue, same gates.
 
 Do not invent a fourth option that drops teach-back. “Skim” means a

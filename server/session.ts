@@ -34,6 +34,7 @@ import {
   walkQueue,
   wrapupFromCards,
 } from "./scaffold.js";
+import type { RiskHit } from "./risk.js";
 import { readAllSessions, writeSession } from "./store.js";
 import type {
   Annotation,
@@ -408,7 +409,18 @@ async function checkoutAndMaybeGate(
 
 async function runOverview(s: Session, mode: "all" | "core"): Promise<void> {
   throwIfAborted(s);
-  const { queue, batched } = walkQueue(s.files, mode);
+  s.workingOn =
+    mode === "core"
+      ? "Picking the core walk and scanning for risky diffs…"
+      : "Mapping the PR…";
+  const { queue, batched, riskPinned } = await walkQueue({
+    files: s.files,
+    mode,
+    repoPath: s.repoPath,
+    baseRef: s.baseRef || "main",
+    signal: signalOf(s),
+  });
+  throwIfAborted(s);
   s.workingOn = "Mapping the PR…";
   const branch = await currentBranch(s.repoPath);
   s.overview = await withAgent(s, (agent) =>
@@ -421,7 +433,7 @@ async function runOverview(s: Session, mode: "all" | "core"): Promise<void> {
       prTitle: s.prTitle,
       prBody: s.prBody,
       assetsNote: assetsNote(s.files),
-      noiseNote: noiseNote(s.files, batched),
+      noiseNote: noiseNote(s.files, batched, riskPinned),
     }),
   );
   s.queue = s.overview.queue;

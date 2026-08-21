@@ -45,7 +45,7 @@ This PR is large: **[N] files**, **[+X/−Y]** (excluding [lockfile / generated 
 A full file-by-file walk will take a while. Pick one:
 
 - **quit** — stop here
-- **core only** — walk up to **8** load-bearing files (I’ll list them), batch the rest
+- **core only** — walk ~**8** load-bearing files, **plus** any other changed files with high-risk diff signals (queue may exceed 8); batch the rest
 - **walk all** — every file, same teach-back as usual
 
 Core-only is still a real review of the spine, not a skim past the gate.

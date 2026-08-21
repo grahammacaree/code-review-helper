@@ -45,7 +45,7 @@ Requires `git` and ideally the GitHub CLI (`gh`) for PR checkout. Without `gh`, 
 
 In Cursor, paste a PR URL or say **walk me through this PR** / **pr-file-walkthrough**. You need a **clean working tree**. Dirty? Switch or stash first; the skill will not checkout over your work. Having GitHub connected does **not** skip checkout — local files are required. Then say **start** after the overview.
 
-If the PR is large (≥ 20 files or ≥ 1500 lines of real churn, ignoring lockfiles/generated/images), it stops and asks **quit**, **core only** (at most 8 load-bearing files, still with teach-back), or **walk all**. That is for AI-sized diffs: forcing every generated file would recreate the glaze. Core-only is not a shortcut past understanding the spine. When you finish or quit, it offers to put you back on the branch you started from.
+If the PR is large (≥ 20 files or ≥ 1500 lines of real churn, ignoring lockfiles/generated/images), it stops and asks **quit**, **core only** (about 8 load-bearing files, plus any other changed files whose diffs look high-risk — the queue may grow), or **walk all**. That is for AI-sized diffs: forcing every generated file would recreate the glaze. Core-only is not a shortcut past understanding the spine or past obvious foot-guns. When you finish or quit, it offers to put you back on the branch you started from.
 
 New SVGs, jpgs, and other pure assets are listed once and skipped. No teach-back on “what is an SVG.”
 
