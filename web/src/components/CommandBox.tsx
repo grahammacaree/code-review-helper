@@ -35,6 +35,9 @@ export function CommandBox({
   const chips = chipsFor(session);
   const prompt = textMode ? promptFor(session) : undefined;
   const canExport = phase === "wrapup" || phase === "done";
+  const showBar = !disabled && (chips.length > 0 || textMode || canExport);
+  const showForm = textMode && !disabled;
+  const emptyBar = !disabled && !showBar && !showForm;
 
   async function copyNotes() {
     if (!session) return;
@@ -59,7 +62,7 @@ export function CommandBox({
           </button>
         </div>
       )}
-      {!disabled && (chips.length > 0 || textMode || canExport) && (
+      {!disabled && showBar && (
         <div className="command-bar">
           {chips.length > 0 && (
             <div className="chips" role="group" aria-label="Walkthrough actions">
@@ -110,7 +113,17 @@ export function CommandBox({
           )}
         </div>
       )}
-      {textMode && !disabled && (
+      {emptyBar && (
+        <button
+          type="button"
+          className="command-box-sizer"
+          tabIndex={-1}
+          aria-hidden="true"
+        >
+          File
+        </button>
+      )}
+      {showForm && (
         <>
           <label htmlFor="command">
             {mode === "ask" ? "Question about this file" : prompt}
@@ -193,12 +206,20 @@ function chipsFor(
       return [{ action: "quit", label: "Quit" }];
     case "done":
       return [
+        ...(!session.homeRestored
+          ? [
+              {
+                action: "restore" as const,
+                label: `Restore ${session.homeBranch || "main"}`,
+                primary: true,
+              },
+            ]
+          : []),
         {
-          action: "restore",
-          label: `Restore ${session.homeBranch || "main"}`,
-          primary: true,
+          action: "reset",
+          label: "New walkthrough",
+          primary: Boolean(session.homeRestored),
         },
-        { action: "reset", label: "New walkthrough" },
       ];
     default:
       return [];

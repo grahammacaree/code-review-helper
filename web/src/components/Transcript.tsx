@@ -17,10 +17,13 @@ export function Transcript({
   return (
     <div className="transcript" role="log" aria-live="polite">
       {messages.length === 0 && (
-        <p className="muted">
-          Point at a local clone and a PR. Checkout happens here; the file card
-          stays on the right.
-        </p>
+        <article className="bubble assistant" data-kind="status">
+          <p>
+            Drop in a local clone and a PR URL (or number), then check it out.
+            I’ll map the change set here; the file you’re walking stays on the
+            right.
+          </p>
+        </article>
       )}
       {messages.map((msg) => (
         <article

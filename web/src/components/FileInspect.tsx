@@ -359,6 +359,8 @@ export function FileInspect({
           <button
             type="button"
             className="secondary"
+            aria-expanded="false"
+            aria-controls="file-notes"
             onClick={() => setNotesHidden(false)}
           >
             Show notes ({here.length})
@@ -367,10 +369,16 @@ export function FileInspect({
       )}
 
       {here.length > 0 && !notesHidden && (
-        <div className="notes">
+        <div className="notes" id="file-notes">
           <div className="notes-head">
             <h3>Notes on this file</h3>
-            <button type="button" className="secondary" onClick={hideNotes}>
+            <button
+              type="button"
+              className="secondary"
+              aria-expanded="true"
+              aria-controls="file-notes"
+              onClick={hideNotes}
+            >
               Hide
             </button>
           </div>
@@ -402,7 +410,7 @@ export function FileInspect({
       )}
 
       {openNote && !notesHidden && (
-        <div className="note-thread">
+        <div className="note-thread" role="region" aria-label="Note thread">
           <div className="notes-head">
             <p>
               <strong>{openNote.kind}</strong> L{openNote.startLine}–L

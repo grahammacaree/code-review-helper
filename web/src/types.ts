@@ -160,7 +160,6 @@ export interface SessionSnapshot {
   id: string;
   phase: Phase;
   repoPath: string;
-  startingBranch: string;
   homeBranch?: string;
   prRef: string;
   prUrl?: string;
@@ -184,6 +183,7 @@ export interface SessionSnapshot {
   workingOn?: string;
   error?: string;
   agentId?: string;
+  homeRestored?: boolean;
 }
 
 export interface AuthStatus {

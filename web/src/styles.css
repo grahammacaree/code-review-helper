@@ -355,6 +355,15 @@ button.hotspot code {
   border-top: 1px solid var(--line);
   padding: var(--pad);
   background: var(--bg-2);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.command-box-sizer {
+  visibility: hidden;
+  pointer-events: none;
+  align-self: flex-start;
 }
 
 .command-bar {
@@ -367,10 +376,6 @@ button.hotspot code {
 
 .command-bar:not(:last-child) {
   margin-bottom: 0.5rem;
-}
-
-.command-bar .chips {
-  margin-bottom: 0;
 }
 
 .command-mode {
@@ -388,8 +393,8 @@ button.hotspot code {
   margin-bottom: 0.5rem;
 }
 
-.row {
-  margin-top: 0.5rem;
+.command-bar .chips {
+  margin-bottom: 0;
 }
 
 .row {

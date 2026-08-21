@@ -56,7 +56,6 @@ interface Session {
   id: string;
   phase: Phase;
   repoPath: string;
-  startingBranch: string;
   homeBranch: string;
   prRef: string;
   prUrl?: string;
@@ -84,6 +83,7 @@ interface Session {
   error?: string;
   agent?: LocalAgent;
   paraphrasedCurrent: boolean;
+  homeRestored: boolean;
   cancel?: AbortController;
 }
 
@@ -131,7 +131,6 @@ function hydrate(raw: unknown): Session | undefined {
     id: o.id,
     phase: o.phase ?? "overview",
     repoPath: o.repoPath,
-    startingBranch: o.startingBranch ?? "",
     homeBranch: o.homeBranch || "main",
     prRef: o.prRef ?? "",
     prUrl: o.prUrl,
@@ -155,6 +154,11 @@ function hydrate(raw: unknown): Session | undefined {
     busy: false,
     error: o.error,
     paraphrasedCurrent: Boolean(o.paraphrasedCurrent),
+    homeRestored:
+      Boolean(o.homeRestored) ||
+      (o.messages ?? []).some(
+        (m) => typeof m.text === "string" && /^Back on /.test(m.text),
+      ),
   };
 }
 
@@ -163,7 +167,6 @@ function snapshot(s: Session): SessionSnapshot {
     id: s.id,
     phase: s.phase,
     repoPath: s.repoPath,
-    startingBranch: s.startingBranch,
     homeBranch: s.homeBranch,
     prRef: s.prRef,
     prUrl: s.prUrl,
@@ -187,6 +190,7 @@ function snapshot(s: Session): SessionSnapshot {
     workingOn: s.workingOn,
     error: s.error,
     agentId: s.agent?.agentId,
+    homeRestored: s.homeRestored,
   };
 }
 
@@ -315,7 +319,6 @@ export async function startSession(input: {
     throw new Error("Pass a GitHub PR URL or number.");
   }
 
-  const startingBranch = await currentBranch(repoPath);
   const homeBranch = await defaultBranch(repoPath);
   let dirty = await porcelainStatus(repoPath);
   if (dirty && input.allowStash) {
@@ -328,7 +331,6 @@ export async function startSession(input: {
     id,
     phase: dirty ? "blocked_dirty" : "overview",
     repoPath,
-    startingBranch,
     homeBranch,
     prRef: parsed.number,
     prUrl: parsed.url,
@@ -341,6 +343,7 @@ export async function startSession(input: {
     annotations: [],
     busy: false,
     paraphrasedCurrent: false,
+    homeRestored: false,
   };
   sessions.set(id, s);
   persist(s);
@@ -702,6 +705,7 @@ export async function restoreBranch(
   return withBusy(s, async () => {
     await checkoutBranch(s.repoPath, branch);
     s.phase = "done";
+    s.homeRestored = true;
     await s.agent?.close();
     s.agent = undefined;
     push(s, {
