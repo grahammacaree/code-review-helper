@@ -133,6 +133,18 @@ function FileBody({
       <Prose text={card.what} />
       <h3>Why</h3>
       <Prose text={card.why} />
+      {card.roleInPr && (
+        <>
+          <h3>Role in PR</h3>
+          <Prose text={card.roleInPr} />
+        </>
+      )}
+      {card.wiringNote && (
+        <>
+          <h3>Wiring</h3>
+          <Prose text={card.wiringNote} />
+        </>
+      )}
       <h3>Links</h3>
       <p className="muted">Already covered</p>
       <PathList items={links.covered} />

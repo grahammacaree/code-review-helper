@@ -42,6 +42,7 @@ import type {
   ChatMessage,
   FileCard,
   FileEntry,
+  FileWiring,
   MessageKind,
   MessageRole,
   Phase,
@@ -50,6 +51,8 @@ import type {
   SessionSnapshot,
   TeachbackResult,
 } from "./types.js";
+import { analyzeFileWiring, buildImportIndex, formatWiringNote } from "./wiring.js";
+import type { WiringImport } from "./wiring.js";
 
 type LocalAgent = Awaited<ReturnType<typeof createReviewAgent>>;
 
@@ -75,6 +78,7 @@ interface Session {
   teachback?: TeachbackResult;
   fileText?: string;
   diffText?: string;
+  fileWiring?: FileWiring;
   focusLine?: number;
   messages: ChatMessage[];
   annotations: Annotation[];
@@ -86,12 +90,25 @@ interface Session {
   paraphrasedCurrent: boolean;
   homeRestored: boolean;
   cancel?: AbortController;
+  wiringImportIndex?: Map<string, WiringImport[]>;
+  wiringImportScopeKey?: string;
 }
 
 const sessions = new Map<string, Session>();
 
 function persist(s: Session): void {
-  const { agent, cancel, fileText, diffText, busy, workingOn, ...rest } = s;
+  const {
+    agent,
+    cancel,
+    fileText,
+    diffText,
+    fileWiring,
+    wiringImportIndex,
+    wiringImportScopeKey,
+    busy,
+    workingOn,
+    ...rest
+  } = s;
   void writeSession(s.id, {
     ...rest,
     busy: false,
@@ -114,6 +131,7 @@ export async function restoreSessions(): Promise<void> {
         if (s.baseRef) {
           s.diffText = await fileDiff(s.repoPath, s.baseRef, s.card.path);
         }
+        s.fileWiring = await computeFileWiring(s);
       } catch {
         /* file may have moved */
       }
@@ -180,6 +198,7 @@ function snapshot(s: Session): SessionSnapshot {
     teachback: s.teachback,
     fileText: s.fileText,
     diffText: s.diffText,
+    fileWiring: s.fileWiring,
     focusLine: s.focusLine,
     files: s.files,
     queue: s.queue,
@@ -193,6 +212,64 @@ function snapshot(s: Session): SessionSnapshot {
     agentId: s.agent?.agentId,
     homeRestored: s.homeRestored,
   };
+}
+
+function wiringScope(s: Session): string[] {
+  const paths = new Set<string>();
+  for (const p of [...s.queue, ...s.covered]) paths.add(p);
+  if (s.card?.path) paths.add(s.card.path);
+  return [...paths];
+}
+
+function wiringScopeKey(paths: string[]): string {
+  return paths.slice().sort().join("\0");
+}
+
+async function wiringImportIndex(
+  s: Session,
+): Promise<Map<string, WiringImport[]>> {
+  const scope = wiringScope(s);
+  const key = wiringScopeKey(scope);
+  if (s.wiringImportScopeKey === key && s.wiringImportIndex) {
+    return s.wiringImportIndex;
+  }
+  const known = new Set(scope);
+  const preload =
+    s.fileText && s.card?.path
+      ? new Map([[s.card.path, s.fileText]])
+      : undefined;
+  const index = await buildImportIndex({
+    repoPath: s.repoPath,
+    scopePaths: scope,
+    known,
+    preload,
+  });
+  s.wiringImportScopeKey = key;
+  s.wiringImportIndex = index;
+  return index;
+}
+
+function invalidateWiringIndex(s: Session): void {
+  s.wiringImportIndex = undefined;
+  s.wiringImportScopeKey = undefined;
+}
+
+async function computeFileWiring(s: Session): Promise<FileWiring | undefined> {
+  if (!s.card?.path) return undefined;
+  const scope = wiringScope(s);
+  const importIndex = await wiringImportIndex(s);
+  const wiring = await analyzeFileWiring({
+    repoPath: s.repoPath,
+    path: s.card.path,
+    fileText: s.fileText,
+    scopePaths: scope,
+    importIndex,
+  });
+  s.card = {
+    ...s.card,
+    wiringNote: formatWiringNote(wiring),
+  };
+  return wiring;
 }
 
 function push(
@@ -437,6 +514,7 @@ async function runOverview(s: Session, mode: "all" | "core"): Promise<void> {
     }),
   );
   s.queue = s.overview.queue;
+  invalidateWiringIndex(s);
   s.phase = "overview";
   push(s, {
     role: "assistant",
@@ -516,6 +594,7 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
     s.card = undefined;
     s.fileText = undefined;
     s.diffText = undefined;
+    s.fileWiring = undefined;
     s.focusLine = undefined;
     s.phase = "wrapup";
     push(s, {
@@ -541,10 +620,10 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
       covered: s.covered,
       baseRef: s.baseRef || "main",
       prUrl: s.prUrl,
+      overview: s.overview,
     }),
   );
   s.card = card;
-  s.cards.push(card);
   s.phase = "file";
   try {
     s.diffText = await fileDiff(s.repoPath, s.baseRef || "main", path);
@@ -553,6 +632,7 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
   }
   if (entry.kind === "deleted") {
     s.fileText = undefined;
+    s.fileWiring = undefined;
     s.focusLine = undefined;
   } else {
     try {
@@ -560,14 +640,16 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
     } catch {
       s.fileText = "// Could not read this path from HEAD.";
     }
+    s.fileWiring = await computeFileWiring(s);
     s.focusLine =
       card.lookCloser[0]?.startLine || card.focus[0]?.start || 1;
   }
+  s.cards.push(s.card);
   push(s, {
     role: "assistant",
     kind: "file",
-    text: card.what,
-    card,
+    text: s.card.what,
+    card: s.card,
   });
 }
 

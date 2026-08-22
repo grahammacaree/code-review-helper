@@ -581,6 +581,7 @@ textarea:focus {
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
   flex-shrink: 0;
 }
@@ -595,6 +596,34 @@ textarea:focus {
 .file-inspect-body > .muted {
   margin: 0;
   padding: 0 1rem;
+}
+
+.context-pane {
+  padding: 0 1rem 1rem;
+}
+
+.context-pane h3 {
+  margin: 0.85rem 0 0.35rem;
+  font-size: var(--heading);
+  font-weight: 600;
+}
+
+.context-pane h3:first-child {
+  margin-top: 0.25rem;
+}
+
+.wiring-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.wiring-list li {
+  margin: 0.25rem 0;
+}
+
+.wiring-foot {
+  margin-top: 0.85rem;
+  font-size: var(--label);
 }
 
 .code {

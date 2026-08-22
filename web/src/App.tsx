@@ -208,6 +208,8 @@ export function App() {
             card={session?.card}
             fileText={session?.fileText}
             diffText={session?.diffText}
+            fileWiring={session?.fileWiring}
+            overview={session?.overview}
             focusLine={focusLine}
             walkNote={walkNote}
             tab={tab}
@@ -263,5 +265,6 @@ function mergeLiteSnapshot(
     ...next,
     fileText: next.fileText ?? prev.fileText,
     diffText: next.diffText ?? prev.diffText,
+    fileWiring: next.fileWiring ?? prev.fileWiring,
   };
 }

@@ -158,6 +158,7 @@ export async function generateFileCard(opts: {
   covered: string[];
   baseRef: string;
   prUrl?: string;
+  overview?: Overview;
 }): Promise<FileCard> {
   const hunks = await fileDiff(opts.cwd, opts.baseRef, opts.entry.path, {
     context: 0,
@@ -175,21 +176,30 @@ export async function generateFileCard(opts: {
   const holder: {
     prose?: Pick<
       FileCard,
-      "what" | "why" | "lookCloser" | "map" | "couldHave" | "uhOh"
+      "what" | "why" | "roleInPr" | "lookCloser" | "map" | "couldHave" | "uhOh"
     >;
   } = {};
+
+  const overviewBits = opts.overview
+    ? [
+        `PR why: ${opts.overview.why}`,
+        `How the queued files connect: ${opts.overview.howItConnects}`,
+      ].join("\n")
+    : "";
 
   const run = await opts.agent.send(
     [
       `File ${opts.index}/${opts.total}: ${opts.entry.path} (${opts.entry.kind}${opts.entry.oldPath ? ` from ${opts.entry.oldPath}` : ""}).`,
       "Call publish_file_card once. Stay on this file.",
       "what: concrete change. why: why this file had to change.",
+      "roleInPr: one short paragraph on this file's purpose relative to the PR's stated and implicit motivation — not a repeat of what/why.",
       "lookCloser: 0–3 named hotspots (complex/novel/central) with line ranges.",
       "couldHave: 0–2 evidenced design forks, or empty.",
       "uhOh: 0–3 evidence-backed watch-outs with line ranges, or empty. Do not invent.",
       opts.entry.kind === "deleted"
         ? "File was deleted; do not invent current contents."
         : "",
+      overviewBits,
       `Hunks:\n${diff || "(empty diff)"}`,
     ]
       .filter(Boolean)
@@ -204,6 +214,7 @@ export async function generateFileCard(opts: {
               properties: {
                 what: { type: "string" },
                 why: { type: "string" },
+                roleInPr: { type: "string" },
                 lookCloser: {
                   type: "array",
                   items: {
@@ -249,6 +260,7 @@ export async function generateFileCard(opts: {
               holder.prose = {
                 what: String(args.what),
                 why: String(args.why),
+                roleInPr: args.roleInPr ? String(args.roleInPr) : undefined,
                 lookCloser,
                 map: args.map ? String(args.map) : undefined,
                 couldHave: Array.isArray(args.couldHave)

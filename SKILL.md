@@ -36,10 +36,10 @@ Copy the output shapes from [templates.md](templates.md).
 3. Opening turn: robust overview (what / why / dependencies /
    connections) + ordered file queue. Stop. Do not start file 1 until
    they say go / start.
-4. One file card per turn (what / why / links / look closer / could have /
-   uh oh), plus a **per-file** GitHub **Diff** link when useful. Open
-   the **local file** in the editor beside the chat. Huge generated
-   files: hunks only.
+4. One file card per turn (what / why / role in PR / wiring / links /
+   look closer / could have / uh oh), plus a **per-file** GitHub **Diff**
+   link when useful. Open the **local file** in the editor beside the chat.
+   Huge generated files: hunks only.
 5. Teach-back gate: do not advance until they explain the file in their
    own words. Side questions are allowed; do not make them recap a file
    they already explained.
@@ -246,7 +246,9 @@ checkout or for opening the local file.
 |---|---|
 | **What** | Concrete change in this file (behavior, API, structure). Not a line dump. |
 | **Why** | Why this file had to change for the PR’s goal. |
-| **Links** | How it connects to files already covered and to upcoming files in the queue. |
+| **Role in PR** | One short paragraph: this file’s job in the **whole PR story** — stated motivation (title/body) **and** implicit motivation (what the overview’s “how it connects” implies this file must do). Not a repeat of What/Why. |
+| **Wiring** | Import/export graph **within this PR’s change set**: what this file pulls in (symbols + from which changed paths or key packages) and what it exports to which other changed files. Read `import`/`export` lines; resolve relative paths against the queued/covered list. External packages only when they are the point (new dependency, auth client, etc.). For non-code paths or when nothing parses, say **none** or one line. |
+| **Links** | Queue context: files already covered and upcoming in the walk — complements Wiring (narrative order vs import graph). |
 | **Look closer** | 0–3 **named** functions/methods (or other hotspots) that are complex or novel, and are central to understanding this change. Each entry: **name + line range + why** (new protocol, dense control flow, non-obvious invariant, first of its kind here). On large files, line ranges are **required** — a bare name is not enough to find the spot. If none, say “none”. Not thin wrappers, re-exports, or routine CRUD. |
 | **Could have** | 0–2 **design forks** on this file only when there was a real choice (API shape, layer, library, sync vs async), and when the code or surrounding context gives evidence that this was an intentional design choice. One line each: plausible alternative + short tradeoff vs what they shipped. If the file is obvious or there's no fork, say “none”. Not a teach-back requirement — counterfactual review, not “you should have done X.” |
 | **Uh oh** | 0–3 watch-outs: bugs, missing tests, risky edges, surprising coupling. Prioritize the highest-leverage risks implied by the code. Might be wrong. If none, say “none”. Do not invent. |
@@ -256,18 +258,23 @@ model (several interlocking helpers, a state machine, parse → transform →
 emit, etc.), you **may** add a short **Map** under Look closer: 2–5 lines
 of how those pieces call each other or order the work. Judgment call —
 only when the names alone would leave the behavior opaque. Do not invent
-architecture diagrams for simple files.
+architecture diagrams for simple files. **Map** is in-file control flow;
+**Wiring** is cross-file imports/exports — use both when the change spans
+files, not as duplicates of the same sentence.
 
 Look closer, Could have, and Uh oh are different buckets. The same
 function may appear in Look closer and Uh oh; Could have is about
 choices, not defects. Map is part of Look closer’s explanation, not a
-separate teach-back gate.
+separate teach-back gate. Role in PR and Wiring are connection context —
+include them in the card, not as extra teach-back gates.
 
 Review texture lives in those buckets — do not add extra card
 sections or extra teach-back questions. Put it where it belongs,
 only when this file actually has it:
 
 - **Overview / large-PR gate:** size, split-worthiness, generated noise.
+- **Role in PR / Wiring:** where this file sits in the PR story and who
+  imports whom among changed paths — before diving into hotspots.
 - **Look closer:** the behavioral contract (inputs, outputs, invariants,
   why it is shaped that way), with line ranges on large files; optional
   Map when interlocking pieces need a path through the file.
@@ -286,18 +293,18 @@ If **Look closer** is not none and the host can open files, jump to the
 first hotspot’s line range (`#L<start>` or `#L<start>-L<end>`) as well as
 the file’s Focus ranges.
 
-End every file turn with the teach-back prompt from [templates.md](templates.md). Require a paraphrase of **what** + **why** solid enough to tell a teammate. If Look closer named hotspots, **prefer** asking about them by name (and may point at the line range) — naming them is a plus, not a hard gate when the file-level explanation is already solid. If a Map was given, how the pieces connect is welcome in the same paraphrase, not a separate gate. Do not advance on “next” / “lgtm” alone.
+End every file turn with the teach-back prompt from [templates.md](templates.md). Require a paraphrase of **what** + **why** solid enough to tell a teammate. **Role in PR** and **Wiring** help them place the file — welcome in the paraphrase but not required verbatim. If Look closer named hotspots, **prefer** asking about them by name (and may point at the line range) — naming them is a plus, not a hard gate when the file-level explanation is already solid. If a Map was given, how the pieces connect is welcome in the same paraphrase, not a separate gate. Do not advance on “next” / “lgtm” alone.
 
 ## Teach-back gate (hard blocker)
 
 Do **not** advance on “next”, “ok”, “lgtm”, or emoji alone.
 
-**Per file:** require a real paraphrase of **what** + **why**. Look
-closer names (and Map connections, when shown) are a **plus**, not a
-hard requirement — pass a solid file-level explanation even if they do
-not recite hotspot names. Line ranges are there so they can find the
-spot when they want to dig in. Connections to other files are optional
-but encouraged.
+**Per file:** require a real paraphrase of **what** + **why**. Role in PR,
+Wiring, Look closer names (and Map connections, when shown) are a **plus**,
+not a hard requirement — pass a solid file-level explanation even if they
+do not recite import paths or hotspot names. Line ranges are there so they
+can find the spot when they want to dig in. Connections to other files are
+optional but encouraged.
 
 **Final:** require a real paraphrase of the whole PR — what it does, why
 it exists, and how the pieces connect (dependencies + call chain).
@@ -361,6 +368,9 @@ confusion.
 - Do not treat Look closer as Uh oh (or flag every new function).
 - Do not give Look closer entries without line ranges on large files.
 - Do not invent a Map on thin or obvious files.
+- Do not duplicate Role in PR and What/Why with the same sentences.
+- Do not paste every import line in Wiring — only paths/symbols that matter
+  for understanding this PR.
 - Do not require teach-back on Could have (optional counterfactual).
 - Do not invent extra review-checklist prompts (tests, ops, consistency,
   rollout) as card sections or teach-back gates.

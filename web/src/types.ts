@@ -54,6 +54,8 @@ export interface FileCard {
   diffUrl?: string;
   what: string;
   why: string;
+  roleInPr?: string;
+  wiringNote?: string;
   links: string;
   lookCloser: LookCloser[];
   map?: string;
@@ -66,6 +68,36 @@ export interface FileCard {
 export interface Wrapup {
   lingeringUhOhs: string;
   designForks?: string;
+}
+
+export type WiringSymbolKind =
+  | "function"
+  | "class"
+  | "component"
+  | "const"
+  | "type"
+  | "default"
+  | "reexport";
+
+export interface WiringImport {
+  names: string[];
+  from: string;
+  resolvedPath?: string;
+  external: boolean;
+  line: number;
+}
+
+export interface WiringExport {
+  name: string;
+  kind: WiringSymbolKind;
+  line: number;
+  consumers: string[];
+}
+
+export interface FileWiring {
+  imports: WiringImport[];
+  exports: WiringExport[];
+  note?: string;
 }
 
 export interface TeachbackResult {
@@ -172,6 +204,7 @@ export interface SessionSnapshot {
   teachback?: TeachbackResult;
   fileText?: string;
   diffText?: string;
+  fileWiring?: FileWiring;
   focusLine?: number;
   files: FileEntry[];
   queue: string[];

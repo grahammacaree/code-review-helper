@@ -72,6 +72,12 @@ until then.
 
 **Why:** [why this file had to change for the PR’s goal]
 
+**Role in PR:** [one short paragraph: this file’s purpose in the whole PR — stated + implicit motivation; not a repeat of What/Why]
+
+**Wiring:**
+- **Into this file:** [{symbols} from `path/in/pr` or key package, …] or **none**
+- **Out of this file:** [{export} → `consumer/in/pr`, …] or **none**
+
 **Links:** [already covered: …] [upcoming: …]
 
 **Look closer:** [`parseNextCursorFromLinkHeader` L42–L68 — [why]] or **none**

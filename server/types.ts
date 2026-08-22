@@ -52,6 +52,20 @@ export interface Overview {
   noiseNote?: string;
 }
 
+import type {
+  FileWiring,
+  WiringExport,
+  WiringImport,
+  WiringSymbolKind,
+} from "./wiring.js";
+
+export type {
+  FileWiring,
+  WiringExport,
+  WiringImport,
+  WiringSymbolKind,
+};
+
 export interface FileCard {
   path: string;
   kind: FileKind;
@@ -60,6 +74,8 @@ export interface FileCard {
   diffUrl?: string;
   what: string;
   why: string;
+  roleInPr?: string;
+  wiringNote?: string;
   links: string;
   lookCloser: LookCloser[];
   map?: string;
@@ -168,6 +184,7 @@ export interface SessionSnapshot {
   teachback?: TeachbackResult;
   fileText?: string;
   diffText?: string;
+  fileWiring?: FileWiring;
   focusLine?: number;
   files: FileEntry[];
   queue: string[];

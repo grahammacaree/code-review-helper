@@ -23,7 +23,7 @@ So the walkthrough:
 
 1. Checks out the PR locally (clean tree first) so you see the **real files** — clickable, with surrounding context — not only hunks. GitHub/`gh` can still supply metadata; checkout stays the primary path.
 2. Gives a **map** first — what happens after merge, why the PR exists, dependencies, how the files connect — then an ordered queue. Not GitHub’s alphabetical dump.
-3. Covers **one file per turn**: the **local** file at the changed lines (primary view — clickable, full context). Optionally adds a GitHub **Diff** link for that path’s hunks only (`file-filters` + `#diff-…`; never opens the whole Files tab). Then what / why / links / a few evidence-backed watch-outs (“uh ohs”). Complex or novel hotspots that are central to the change get a **Look closer** callout with **name + line range** (especially on big files) so you can find them; naming them in teach-back is a plus, not a hard gate when the file-level explanation is solid. On interlocking files, there may be a short **Map** of how those pieces connect. On files with a real, evidenced design fork, **Could have** names a plausible alternative and tradeoff (counterfactual review, not a teach-back gate). Uh ohs are the highest-leverage risks implied by *this* file, not a tour of every review dimension.
+3. Covers **one file per turn**: the **local** file at the changed lines (primary view — clickable, full context). Optionally adds a GitHub **Diff** link for that path’s hunks only (`file-filters` + `#diff-…`; never opens the whole Files tab). Then what / why / **role in PR** / **wiring** (imports and exports among changed files) / links / a few evidence-backed watch-outs (“uh ohs”). The right column also has **Role** and **Wiring** tabs for the same connection context. Complex or novel hotspots that are central to the change get a **Look closer** callout with **name + line range** (especially on big files) so you can find them; naming them in teach-back is a plus, not a hard gate when the file-level explanation is solid. On interlocking files, there may be a short **Map** of how those pieces connect. On files with a real, evidenced design fork, **Could have** names a plausible alternative and tradeoff (counterfactual review, not a teach-back gate). Uh ohs are the highest-leverage risks implied by *this* file, not a tour of every review dimension.
 4. **Will not advance** on “next”, “lgtm”, or a nod. You explain the file in your own words. Wrong or thin: it corrects one beat and stays put. A question is answered without counting as teach-back (in the app, switch to **Ask**). Skip exists if you are stuck. Teach-back is what / why well enough to tell a teammate. It does not quiz you on Could have, uh ohs, or a review checklist. Map is not a separate gate.
 5. At the end you summarise the whole PR. It does not recap the opening for you to parrot. Design forks from the walk are collected in wrap-up if any came up. In the app, **Copy review notes** gathers uh-ohs and your inline notes for the GitHub review where your approval actually lands. Then it offers to restore your home branch.
 
@@ -78,7 +78,7 @@ API: http://127.0.0.1:8787
 
 You need `git` and ideally `gh` on `PATH`. Point the form at a **local clone** and a PR URL or number. The app checks out the PR tip in that repo (clean tree first). Prefer running the app from a projects checkout, not from `~/.cursor/skills/`, if you want that skills folder to stay lean.
 
-Walks persist across refresh and server restart (`data/sessions/`, gitignored; the browser remembers the session id). **New File** / **Reset** starts over. The function probe looks for Jest/spec samples and typed fixtures (`const foo: Type = { … }`), not only inline literals. At wrap-up (and when done), **Copy review notes** puts lingering uh-ohs, design forks, and your inline questions/comments on the clipboard as Markdown for pasting into a GitHub review.
+Walks persist across refresh and server restart (`data/sessions/`, gitignored; the browser remembers the session id). **New File** / **Reset** starts over. The function probe looks for Jest/spec samples and typed fixtures (`const foo: Type = { … }`), not only inline literals. Each file card includes **Role in PR** (agent) and **Wiring** (parsed imports/exports among queued and covered files); the right column exposes the same as **Role** and **Wiring** tabs beside **File** and **Diff**. At wrap-up (and when done), **Copy review notes** puts lingering uh-ohs, design forks, and your inline questions/comments on the clipboard as Markdown for pasting into a GitHub review.
 
 ## What it is not
 
@@ -94,7 +94,10 @@ Walks persist across refresh and server restart (`data/sessions/`, gitignored; t
 | `SKILL.md` | Agent instructions (Cursor skill format; usable elsewhere) |
 | `templates.md` | Output shapes (overview, file card, teach-back, wrap-up) |
 | `server/` | Walkthrough host (checkout, gates, agent, function probe) |
+| `server/wiring.ts` | Static import/export graph for the **Wiring** tab and card notes |
 | `web/` | Local UI |
+| `web/src/components/RolePane.tsx` | **Role** tab — PR motivation + file role |
+| `web/src/components/WiringPane.tsx` | **Wiring** tab — parsed imports/exports in walk scope |
 
 In Cursor the skill id is `pr-file-walkthrough` so existing triggers keep working. This repo is named `code-review-helper`.
 

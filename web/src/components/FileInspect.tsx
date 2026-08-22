@@ -2,20 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import type {
   Annotation,
   FileCard,
+  FileWiring,
   FnBlock,
   LookCloser,
+  Overview,
   ProbeArgSuggestion,
   ProbeResult,
 } from "../types";
 import { DiffPane } from "./DiffPane";
 import { FilePane, defaultArgsJson } from "./FilePane";
+import { RolePane } from "./RolePane";
+import { WiringPane } from "./WiringPane";
 
-export type FileTab = "diff" | "file";
+export type FileTab = "diff" | "file" | "role" | "wiring";
 
 export function FileInspect({
   card,
   fileText,
   diffText,
+  fileWiring,
+  overview,
   focusLine,
   walkNote,
   tab,
@@ -34,6 +40,8 @@ export function FileInspect({
   card?: FileCard;
   fileText?: string;
   diffText?: string;
+  fileWiring?: FileWiring;
+  overview?: Overview;
   focusLine?: number;
   walkNote?: LookCloser | null;
   tab: FileTab;
@@ -144,6 +152,28 @@ export function FileInspect({
           >
             File
           </button>
+          <button
+            type="button"
+            role="tab"
+            id="tab-role"
+            aria-controls="file-view-panel"
+            aria-selected={tab === "role"}
+            className={tab === "role" ? undefined : "secondary"}
+            onClick={() => onTab("role")}
+          >
+            Role
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="tab-wiring"
+            aria-controls="file-view-panel"
+            aria-selected={tab === "wiring"}
+            className={tab === "wiring" ? undefined : "secondary"}
+            onClick={() => onTab("wiring")}
+          >
+            Wiring
+          </button>
         </div>
       </header>
       {card ? (
@@ -151,10 +181,22 @@ export function FileInspect({
           className="file-inspect-body"
           role="tabpanel"
           id="file-view-panel"
-          aria-labelledby={tab === "diff" ? "tab-diff" : "tab-file"}
+          aria-labelledby={
+            tab === "diff"
+              ? "tab-diff"
+              : tab === "file"
+                ? "tab-file"
+                : tab === "role"
+                  ? "tab-role"
+                  : "tab-wiring"
+          }
         >
           {tab === "diff" ? (
             <DiffPane path={card.path} diff={diffText} />
+          ) : tab === "role" ? (
+            <RolePane card={card} overview={overview} />
+          ) : tab === "wiring" ? (
+            <WiringPane wiring={fileWiring} />
           ) : (
           <FilePane
             path={card.path}
