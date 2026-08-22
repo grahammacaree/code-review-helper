@@ -15,6 +15,18 @@ Code reviews are perhaps the most challenging part of modern software engineerin
 
 One possibility was to find a way to automate reviews entirely, but that's an undesirable shortcut: code reviews are how we learn what our colleagues are doing and how the whole system works, **and** how we take responsibility for merging — not just a pass/fail test running through the reviewer. Instead, I've chosen to **force** reviewer attentiveness by building a review assistant skill in Cursor that forces you to walk through the PR diff and engage in back-and-forth queries until the system is satisfied that you know how each file works, the motivations behind the structure, and how the PR connects as a whole. On large PRs it still refuses to batch past diffs that look like real foot-guns, and the app can hand you review notes to paste when you're ready to approve or request changes. This is, perversely, AI tooling that makes everything take longer — but the outcome is better code, an honest thumbs-up, and, on my end, a better engineer.
 
+## Design principles
+
+**What a code review is for.** A review is not mainly a lint pass or a merge gate with a comment box. It is how a team shares context, catches mistakes before they land, and takes shared responsibility for what ships. The reviewer should be able to explain the change — what it does, why it exists, how it fits the rest of the system — well enough to stand behind an approval or a targeted request for changes.
+
+**Code is connected.** A diff line in isolation rarely tells the story. Changes propagate through call chains, imports and exports, shared types, config, and the PR’s stated goal. Good review is systems thinking: how this file serves the whole change, who calls what, what broke if this assumption is wrong. Tools should foreground that connectivity — map before file-by-file, role in the PR, wiring between paths — not encourage file-at-a-time amnesia.
+
+**Amplify, don't replace.** AI tooling is good at shortcuts: summarize diffs, flag patterns, skip to “looks fine.” Shortcuts save time, but they can also train you out of the work that reviews are for. Useful assistants **prepare** (map the change set, order files by dependency, surface how pieces connect, flag evidence-backed risks), **structure** (one file at a time with links back to the queue and the overview), and **support** (answer questions, export notes for the real GitHub review). They should not **substitute** for understanding or for the act of approving.
+
+**Keep the human on the hook.** The model can propose; the reviewer still paraphrases, prioritizes, and signs off. Gates that block “lgtm” without explanation, separation of defect-hunting from the walk, and notes that feed into an official review — all of that keeps AI in a collaborator role rather than an autopilot.
+
+**When in doubt, prefer depth over speed.** Large PRs get a honest size gate, not a silent skim. High-risk diffs stay in the walk even in core-only mode. The goal is a reviewer who is *better* after using the tool, not one who has outsourced judgment to it.
+
 ## Why this shape
 
 GitHub’s diff UI is built for scanning. That is useful for “did anyone typo the config key?” It is a poor teacher. You can approve a PR and still not be able to explain it to a teammate.
@@ -73,8 +85,8 @@ npm install
 npm run dev
 ```
 
-UI: http://127.0.0.1:5173  
-API: http://127.0.0.1:8787
+UI: [http://127.0.0.1:5173](http://127.0.0.1:5173)  
+API: [http://127.0.0.1:8787](http://127.0.0.1:8787)
 
 You need `git` and ideally `gh` on `PATH`. Point the form at a **local clone** and a PR URL or number. The app checks out the PR tip in that repo (clean tree first). Prefer running the app from a projects checkout, not from `~/.cursor/skills/`, if you want that skills folder to stay lean.
 
@@ -87,17 +99,21 @@ Walks persist across refresh and server restart (`data/sessions/`, gitignored; t
 - Not a ship checklist for your own diffs, and not a full code-review rubric on every file.
 - The app does not post GitHub review comments, edit or commit in the repo under review, or piggyback on the Cursor app session.
 
+
+
 ## Files
 
-| Path | Role |
-|---|---|
-| `SKILL.md` | Agent instructions (Cursor skill format; usable elsewhere) |
-| `templates.md` | Output shapes (overview, file card, teach-back, wrap-up) |
-| `server/` | Walkthrough host (checkout, gates, agent, function probe) |
-| `server/wiring.ts` | Static import/export graph for the **Wiring** tab and card notes |
-| `web/` | Local UI |
-| `web/src/components/RolePane.tsx` | **Role** tab — PR motivation + file role |
-| `web/src/components/WiringPane.tsx` | **Wiring** tab — parsed imports/exports in walk scope |
+
+| Path                                | Role                                                             |
+| ----------------------------------- | ---------------------------------------------------------------- |
+| `SKILL.md`                          | Agent instructions (Cursor skill format; usable elsewhere)       |
+| `templates.md`                      | Output shapes (overview, file card, teach-back, wrap-up)         |
+| `server/`                           | Walkthrough host (checkout, gates, agent, function probe)        |
+| `server/wiring.ts`                  | Static import/export graph for the **Wiring** tab and card notes |
+| `web/`                              | Local UI                                                         |
+| `web/src/components/RolePane.tsx`   | **Role** tab — PR motivation + file role                         |
+| `web/src/components/WiringPane.tsx` | **Wiring** tab — parsed imports/exports in walk scope            |
+
 
 In Cursor the skill id is `pr-file-walkthrough` so existing triggers keep working. This repo is named `code-review-helper`.
 
