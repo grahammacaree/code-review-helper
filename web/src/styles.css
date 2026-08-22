@@ -284,6 +284,7 @@ a {
 
 .bubble.assistant {
   align-self: stretch;
+  scroll-margin-top: 0.75rem;
 }
 
 .bubble h2,

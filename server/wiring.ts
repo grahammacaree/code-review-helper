@@ -179,14 +179,31 @@ function parseImports(
 ): WiringImport[] {
   const lines = text.split("\n");
   const out: WiringImport[] = [];
-  for (let i = 0; i < lines.length; i += 1) {
+  let i = 0;
+  while (i < lines.length) {
     const line = lines[i];
     const side = line.match(/^\s*import\s+['"]([^'"]+)['"]/);
     if (side) {
       out.push(importRow(path, side[1], ["*"], i + 1, known));
+      i += 1;
       continue;
     }
-    const from = line.match(
+    if (!/^\s*import\b/.test(line)) {
+      i += 1;
+      continue;
+    }
+
+    let stmt = line;
+    let end = i;
+    if (!/\sfrom\s+['"]/.test(line)) {
+      while (end + 1 < lines.length && !/\sfrom\s+['"]/.test(stmt)) {
+        end += 1;
+        stmt += ` ${lines[end].trim()}`;
+      }
+    }
+    const startLine = i + 1;
+
+    const from = stmt.match(
       /^\s*import\s+(?:type\s+)?(?:(\*\s+as\s+(\w+))|(\{[^}]+\})|(\w+))\s+from\s+['"]([^'"]+)['"]/,
     );
     if (from) {
@@ -195,27 +212,31 @@ function parseImports(
         : from[4]
           ? [from[4]]
           : [from[2] || "*"];
-      out.push(importRow(path, from[5], names, i + 1, known));
-      continue;
-    }
-    const def = line.match(
-      /^\s*import\s+(\w+)\s*,\s*\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/,
-    );
-    if (def) {
-      out.push(
-        importRow(
-          path,
-          def[3],
-          ["default", ...parseNamed(def[2])],
-          i + 1,
-          known,
-        ),
+      out.push(importRow(path, from[5], names, startLine, known));
+    } else {
+      const def = stmt.match(
+        /^\s*import\s+(\w+)\s*,\s*\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/,
       );
-      continue;
+      if (def) {
+        out.push(
+          importRow(
+            path,
+            def[3],
+            ["default", ...parseNamed(def[2])],
+            startLine,
+            known,
+          ),
+        );
+      }
     }
-    const req = line.match(/require\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+
+    i = end + 1;
+  }
+
+  for (let j = 0; j < lines.length; j += 1) {
+    const req = lines[j].match(/require\s*\(\s*['"]([^'"]+)['"]\s*\)/);
     if (req) {
-      out.push(importRow(path, req[1], ["*"], i + 1, known));
+      out.push(importRow(path, req[1], ["*"], j + 1, known));
     }
   }
   return out;
@@ -240,13 +261,22 @@ function importRow(
 }
 
 function parseNamed(raw: string): string[] {
-  return raw
+  const inner = raw
+    .trim()
+    .replace(/^\{/, "")
+    .replace(/\}$/, "")
+    .trim();
+  if (!inner) return [];
+  return inner
     .split(",")
-    .map((part) => {
-      const m = part.trim().match(/^(\w+)(?:\s+as\s+(\w+))?$/);
-      return m?.[2] || m?.[1];
-    })
+    .map((part) => parseImportBinding(part.trim()))
     .filter((n): n is string => Boolean(n));
+}
+
+function parseImportBinding(part: string): string | undefined {
+  if (!part) return undefined;
+  const m = part.match(/^(?:type\s+)?(\w+)(?:\s+as\s+(\w+))?$/);
+  return m?.[2] || m?.[1];
 }
 
 function parseExports(text: string): WiringExport[] {
@@ -351,6 +381,7 @@ function stripExt(path: string): string {
 }
 
 function formatNames(names: string[]): string {
+  if (!names.length) return "(unparsed bindings)";
   if (names.length === 1 && names[0] === "*") return "(side effect)";
   if (names.includes("default")) {
     const rest = names.filter((n) => n !== "default");

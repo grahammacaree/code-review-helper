@@ -325,6 +325,25 @@ recited the card. Do not fail a solid what/why only because Look closer
 names were skipped. Do not require them to cover Could have, Uh oh, or
 review-checklist items that were not in the card.
 
+## Questions and inline notes (review Q&A)
+
+Side questions in chat (**Ask**) and inline **question** / **comment** notes
+on a line range are **review Q&A**, not requests to change the PR.
+
+- **Explain** — what the code does, why it is shaped this way, how tests or
+  mocks relate to production patterns, tradeoffs. Help the reviewer decide
+  what to think, not what to type.
+- **Do not implement** — no offers to refactor, “slim this down”, “switch to
+  `renderWithTheme`”, “happy to do in a follow-up”, or other coding-task
+  language unless they explicitly ask you to edit the code.
+- **Review observations** — if something might be worth raising on GitHub,
+  phrase it as a note they could leave on the PR (“might be worth asking
+  whether…”, “could note on the review that…”), not as work for the agent.
+- **Comments** — acknowledge and sharpen their note; do not rewrite the PR.
+
+Curiosity (“does Jest get tokens here?”) is not a change request. Treat it
+as understanding the existing diff.
+
 ## Wrap-up (final teach-back)
 
 After the last file, do **not** restate the opening overview. Give
@@ -377,3 +396,5 @@ confusion.
 - Do not post GitHub comments unless asked.
 - Do not submit a PR review (Approve / Comment / Request changes) as
   part of this walk. Viewed flags only, and only optionally.
+- Do not answer review questions as if they were implementation requests
+  (no “happy to refactor in a follow-up” unless they explicitly asked for edits).

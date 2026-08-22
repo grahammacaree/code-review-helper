@@ -115,6 +115,18 @@ export function FileInspect({
     setDraft("");
   }
 
+  function closeProbe() {
+    sampleAbort.current?.abort();
+    sampleGen.current += 1;
+    setFn(null);
+    setSampleNote(null);
+    setSampleKind(null);
+  }
+
+  function sameFn(a: FnBlock, b: FnBlock): boolean {
+    return a.startLine === b.startLine && a.name === b.name;
+  }
+
   return (
     <section
       className={card ? "file-inspect" : "file-inspect empty"}
@@ -129,6 +141,7 @@ export function FileInspect({
           )}
           {card ? <span className="kind-label">{card.kind}</span> : null}
         </h2>
+        {card ? (
         <div className="tabs" role="tablist" aria-label="File views">
           <button
             type="button"
@@ -175,6 +188,16 @@ export function FileInspect({
             Wiring
           </button>
         </div>
+        ) : (
+          <button
+            type="button"
+            className="command-box-sizer secondary"
+            tabIndex={-1}
+            aria-hidden="true"
+          >
+            File
+          </button>
+        )}
       </header>
       {card ? (
         <div
@@ -222,6 +245,10 @@ export function FileInspect({
               setDraft("");
             }}
             onFunction={(next) => {
+              if (fn && sameFn(fn, next)) {
+                closeProbe();
+                return;
+              }
               const gen = ++sampleGen.current;
               sampleAbort.current?.abort();
               const ac = new AbortController();
@@ -372,13 +399,7 @@ export function FileInspect({
             <button
               type="button"
               className="secondary"
-              onClick={() => {
-                sampleAbort.current?.abort();
-                sampleGen.current += 1;
-                setFn(null);
-                setSampleNote(null);
-                setSampleKind(null);
-              }}
+              onClick={closeProbe}
             >
               Close
             </button>

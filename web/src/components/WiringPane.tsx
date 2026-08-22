@@ -83,6 +83,7 @@ function ExportRow({ exp }: { exp: WiringExport }) {
 }
 
 function formatNames(names: string[]): string {
+  if (!names.length) return "(unparsed bindings)";
   if (names.length === 1 && names[0] === "*") return "(side effect)";
   if (names.includes("default")) {
     const rest = names.filter((n) => n !== "default");

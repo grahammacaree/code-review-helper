@@ -114,11 +114,12 @@ Try that part again in your own words — still this file / still the whole PR, 
 
 ## Teach-back: question after a good paraphrase
 
-Answer. Do not recap the file. Then the next card, wrap-up, or a short
-“say **next** when you want to continue” if they might have more questions.
+Answer. Do not recap the file. **Review Q&A only** — no implementation offers.
+Then the next card, wrap-up, or a short “say **next** when you want to continue”
+if they might have more questions.
 
 ```markdown
-[Direct answer.]
+[Direct answer — understanding only.]
 
 That’s enough on this file unless you want to stay. **Next** when you’re ready.
 ```
@@ -126,12 +127,29 @@ That’s enough on this file unless you want to stay. **Next** when you’re rea
 ## Teach-back: question, then re-prompt
 
 They have **not** paraphrased yet. Answer the question, then re-prompt.
-Do not advance.
+Do not advance. **Review Q&A only** — explain the code; do not offer to
+change it or “do this in a follow-up” unless they explicitly asked for edits.
 
 ```markdown
-[Direct answer.]
+[Direct answer — understanding only, no implementation offers.]
 
 Still this file: in your own words, what does it change, and why was it needed?
+```
+
+## Inline note: question answered
+
+For **Ask in chat** or an inline **question** on a line range. Explain only.
+
+```markdown
+[Direct answer about what the selected code does and why it is shaped this way. No offers to refactor or land follow-up changes.]
+
+[Optional: one line they could paste into a GitHub review comment if they want to raise it — not “I can fix this”.]
+```
+
+## Inline note: comment acknowledged
+
+```markdown
+[Short acknowledgment — sharpen their note if helpful. Do not rewrite the code or offer to edit.]
 ```
 
 ## Teach-back: adequate → advance

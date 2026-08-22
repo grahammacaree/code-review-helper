@@ -44,9 +44,20 @@ export function FilePane({
 }) {
   const target = useRef<HTMLSpanElement>(null);
   const pre = useRef<HTMLPreElement>(null);
+  const prevPath = useRef(path);
   const [plus, setPlus] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
+    if (prevPath.current !== path) {
+      prevPath.current = path;
+      const el = pre.current;
+      if (el) {
+        el.scrollTop = 0;
+        el.closest(".file-inspect-body")?.scrollTo({ top: 0 });
+      }
+      return;
+    }
+    if (focusLine == null) return;
     target.current?.scrollIntoView({ block: "center" });
   }, [path, focusLine]);
 

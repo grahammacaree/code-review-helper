@@ -9,13 +9,26 @@ export function Transcript({
   messages: ChatMessage[];
   onLookCloser: (hotspot: LookCloser) => void;
 }) {
+  const host = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
+    if (!messages.length) return;
+    const last = messages[messages.length - 1];
+    if (last.role === "assistant") {
+      const bubble = host.current?.querySelector<HTMLElement>(
+        `[data-msg="${last.id}"]`,
+      );
+      if (bubble) {
+        bubble.scrollIntoView({ block: "start" });
+      }
+      return;
+    }
     end.current?.scrollIntoView({ block: "end" });
-  }, [messages.length]);
+  }, [messages]);
 
   return (
-    <div className="transcript" role="log" aria-live="polite">
+    <div ref={host} className="transcript" role="log" aria-live="polite">
       {messages.length === 0 && (
         <article className="bubble assistant" data-kind="status">
           <p>
@@ -28,6 +41,7 @@ export function Transcript({
       {messages.map((msg) => (
         <article
           key={msg.id}
+          data-msg={msg.id}
           className={`bubble ${msg.role}`}
           data-kind={msg.kind}
         >

@@ -15,6 +15,15 @@ type LocalAgent = Awaited<ReturnType<typeof Agent.create>>;
 const AGENT_DIFF_CHARS = 8_000;
 const AGENT_BODY_CHARS = 4_000;
 
+/** Shared guardrails for chat Ask and inline annotation replies during a review. */
+const REVIEW_QA_RULES = [
+  "You are helping a reviewer understand a pull request. This is a code review, not a coding exercise.",
+  "The reviewer is reading PR code as proposed — not asking you to edit, refactor, test-drive changes, or land follow-ups unless they explicitly ask you to change/implement/fix something in the repo.",
+  "Answer to build understanding: what the code does, why it is shaped this way, plausible tradeoffs, how it connects. Use the file card and selected range when provided.",
+  "Do not offer to make changes, refactor, or say you can do something 'in a follow-up', 'happy to slim this down', or 'switch to X' — those read like implementation offers. If something is worth raising, frame it as a review observation they might put on GitHub, not work for you to do now.",
+  "Do not grade teach-back in these replies.",
+].join("\n");
+
 export async function authStatus(): Promise<{
   configured: boolean;
   models?: string[];
@@ -372,9 +381,11 @@ export async function answerFileQuestion(opts: {
   const holder: { value?: string } = {};
   const run = await opts.agent.send(
     [
-      "Answer this reviewer question. Call publish_reply once.",
-      "Do not grade a teach-back. Do not demand a paraphrase in this reply.",
-      "End with one short line that teach-back is still required before advancing.",
+      REVIEW_QA_RULES,
+      "Answer this reviewer question in the chat. Call publish_reply once.",
+      opts.stage === "file"
+        ? "End with one short line that teach-back is still required before advancing (unless they already paraphrased this file well enough)."
+        : "",
       opts.stage === "file" && opts.card
         ? `Current file: ${opts.card.path}\nWhat: ${opts.card.what}\nWhy: ${opts.card.why}`
         : "Stage: wrap-up of the whole PR.",
@@ -420,9 +431,10 @@ export async function answerAnnotation(opts: {
   const holder: { value?: string } = {};
   const run = await opts.agent.send(
     [
+      REVIEW_QA_RULES,
       opts.kind === "question"
-        ? "Answer this reviewer question about a code range. Call publish_reply once."
-        : "Acknowledge this review comment. Call publish_reply once. Do not replace the comment.",
+        ? "Answer this inline review question about a code range. Call publish_reply once. Explain only — do not treat the question as a request to change the code."
+        : "Acknowledge this inline review comment. Call publish_reply once. Do not replace the comment or offer to edit the code.",
       `File: ${opts.path} L${opts.startLine}–L${opts.endLine}`,
       `Selected:\n${opts.selectedText.slice(0, 4000) || "(empty)"}`,
       `${opts.kind === "question" ? "Question" : "Comment"}:\n${opts.body}`,
