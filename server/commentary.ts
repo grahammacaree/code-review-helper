@@ -86,7 +86,8 @@ export function commentaryPromptBlock(
   if (!bundle || (!bundle.userMarkdown && !bundle.repoMarkdown)) return "";
   return [
     "Private reviewer notes live in the walkthrough app (`data/commentary/`), never in the git checkout under review.",
-    "Tilt uh-ohs / Look closer / explanations toward gaps and nudges below when this file actually hits them.",
+    "Tilt uh-ohs / Look closer / explanations toward **Working on** / **Still thin** / **Nudges** when this file actually hits them.",
+    "**Do not hammer** (and quiet gaps) are cooling off — do not tilt toward them unless this hunk clearly hits that seam again.",
     "Do not add card sections. Do not teach-back the notes. Do not invent character flaws. Do not quote the notes unless a nudge is directly relevant.",
     bundle.userMarkdown
       ? `Craft notes (Graham):\n${clip(bundle.userMarkdown, 3500)}`
@@ -110,9 +111,13 @@ Private. Walkthrough app only. Kind, firm, specific. Never contempt.
 
 ## Working on
 
+Gaps with fresh evidence. Tag quiet walks as (quiet: 0). If a walk does not show the gap, increment quiet. After two quiet walks, move to Do not hammer. After it stays quiet there, drop it. Do not keep a weakness forever.
+
 (none yet)
 
 ## Do not hammer
+
+Cooled-off gaps. Do not nag cards about these unless this walk hits the seam again — then they can return to Working on.
 
 (none yet)
 `;

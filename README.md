@@ -9,11 +9,15 @@ This repo has two surfaces that share the same rough workflow:
 
 The local app is the primary tool. The skill is a lighter, portable copy of the same walk — easier to grab, without the UI, private notes, or host-owned chase insert. This project was built and tested in [Cursor](https://cursor.com). The skill should work in any coding agent with git access. The app drives a **local Cursor agent** via `@cursor/sdk` (usage bills to your Cursor API key).
 
+This project is intended mainly as personal software and as such may incorporate some of my own ideosyncracies — if you try it out and it doesn’t work for you, it will probably require some tweaks to accommodate your personal workflow. 
+
 ## Motivation
 
 Code reviews are perhaps the most challenging part of modern software engineering. Reviewing well forces you to spend your time and energy understanding something you didn't write yourself, solving a problem you may not fully understand. That's difficult to do, and if you're anything like me you might let your eyes glaze over or flail around blindly for a segment of code you do understand. Not being the reviewer I **should** be has been weighing on me, and with reviews becoming more and more of the job as AI-assisted coding proliferates, I decided I needed a solution.
 
 One possibility was to find a way to automate reviews entirely, but that's an undesirable shortcut: code reviews are how we learn what our colleagues are doing and how the whole system works, **and** how we take responsibility for what’s in the codebase. I've therefore chosen to **force** reviewer attentiveness by building a review assistant that forces me to walk through the PR diff and engage in back-and-forth queries until the system is satisfied that I know how each file works, the motivations behind the structure, and how the PR connects as a whole. This is, perversely, AI tooling that makes everything take longer — but the outcome is better code, an honest thumbs-up, and, on my end, a better engineer.
+
+It has not escaped my notice that this tooling can also be used to interrogate my own drafted pull requests.
 
 ## Design principles
 
@@ -94,7 +98,7 @@ API: [http://127.0.0.1:8787](http://127.0.0.1:8787)
 
 You need `git` and ideally `gh` on `PATH`. Point the form at a **local clone** and a PR URL or number. The app checks out the PR tip in that repo (clean tree first). Prefer running the app from a projects checkout, not from `~/.cursor/skills/`, if you want that skills folder to stay lean.
 
-Walks persist across refresh and server restart (`data/sessions/`, gitignored; the browser remembers the session id). After a walk, the app also rewrites **private notes** under `data/commentary/` in *this* project (`user.md` for craft across repos, `repos/<origin>.md` for that checkout). Those files never land in the git tree you are reviewing, and they are not part of the Cursor skill. Later walks tilt toward gaps and nudges there — kind and specific, not a public “Graham keeps missing X.” Familiarity (catch vs catch-up) lives in those notes; the **Repo** overview block is stack/docs Watch for, not a detector of whether you already own the system. **New walkthrough** starts over. The function probe looks for Jest/spec samples and typed fixtures (`const foo: Type = { … }`), not only inline literals. Each file card includes **Role in PR** (agent) and **Wiring** (parsed imports/exports among queued and covered files — “no importers in walk scope” means none *in this walk*, not unused in the product); the right column exposes the same as **Role** and **Wiring** tabs beside **File** and **Diff**. If an unchanged file still imports a changed export, Wiring (and a chip) can **Chase** it: up to three thin cards inserted after the current file (finish this file first), no chase-on-chase, skip / done looking instead of teach-back. Checkout is what lets you click through to those callers. The overview adds a **Repo** note when we can tell what the checkout is (mobile vs website vs backend, plus any `AGENTS.md` / contributing bullets) so uh-ohs tilt toward those seams without extra quiz steps. If you have private notes, the overview also shows a short **Your notes** digest (not the full files). At wrap-up (and when done), **Copy review notes** puts lingering uh-ohs, design forks, and your inline questions/comments on the clipboard as Markdown for pasting into a GitHub review.
+Walks persist across refresh and server restart (`data/sessions/`, gitignored; the browser remembers the session id). After a walk, the app also rewrites **private notes** under `data/commentary/` in *this* project (`user.md` for craft across repos, `repos/<origin>.md` for that checkout). Those files never land in the git tree you are reviewing, and they are not part of the Cursor skill. Later walks tilt toward gaps and nudges there — kind and specific, not a public “Graham keeps missing X.” Weaknesses decay: if a walk does not show the gap, it cools off and then drops, so old nags do not stick forever. Familiarity (catch vs catch-up) lives in those notes; the **Repo** overview block is stack/docs Watch for, not a detector of whether you already own the system. **New walkthrough** starts over. The function probe looks for Jest/spec samples and typed fixtures (`const foo: Type = { … }`), not only inline literals. Each file card includes **Role in PR** (agent) and **Wiring** (parsed imports/exports among queued and covered files — “no importers in walk scope” means none *in this walk*, not unused in the product); the right column exposes the same as **Role** and **Wiring** tabs beside **File** and **Diff**. If an unchanged file still imports a changed export, Wiring (and a chip) can **Chase** it: up to three thin cards inserted after the current file (finish this file first), no chase-on-chase, skip / done looking instead of teach-back. Checkout is what lets you click through to those callers. The overview adds a **Repo** note when we can tell what the checkout is (mobile vs website vs backend, plus any `AGENTS.md` / contributing bullets) so uh-ohs tilt toward those seams without extra quiz steps. If you have private notes, the overview also shows a short **Your notes** digest (not the full files). At wrap-up (and when done), **Copy review notes** puts lingering uh-ohs, design forks, and your inline questions/comments on the clipboard as Markdown for pasting into a GitHub review.
 
 ## What it is not
 
@@ -103,22 +107,20 @@ Walks persist across refresh and server restart (`data/sessions/`, gitignored; t
 - Not a ship checklist for your own diffs, and not a full code-review rubric on every file.
 - The app does not edit or commit in the repo under review, or piggyback on the Cursor app session. Private walkthrough notes stay in this app’s `data/` folder.
 
-
-
 ## Files
 
 
-| Path                                | Role                                                             |
-| ----------------------------------- | ---------------------------------------------------------------- |
-| `SKILL.md`                          | Agent instructions (Cursor skill format; usable elsewhere)       |
-| `templates.md`                      | Output shapes (overview, file card, teach-back, wrap-up)         |
-| `server/`                           | Walkthrough host (checkout, gates, agent, function probe)        |
-| `server/wiring.ts`                  | Import/export graph among **walk** files; `findOutsideImporters` for opt-in chase |
+| Path                                | Role                                                                                                                 |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `SKILL.md`                          | Agent instructions (Cursor skill format; usable elsewhere)                                                           |
+| `templates.md`                      | Output shapes (overview, file card, teach-back, wrap-up)                                                             |
+| `server/`                           | Walkthrough host (checkout, gates, agent, function probe)                                                            |
+| `server/wiring.ts`                  | Import/export graph among **walk** files; `findOutsideImporters` for opt-in chase                                    |
 | `server/repoLens.ts`                | Checkout kind + doc/stack Watch for (overview + uh-oh bias). Catch vs catch-up is notes + judgment, not this module. |
-| `server/commentary.ts`              | Private notes in `data/commentary/` (this app folder only; not the reviewed repo) |
-| `web/`                              | Local UI                                                         |
-| `web/src/components/RolePane.tsx`   | **Role** tab — PR motivation + file role                         |
-| `web/src/components/WiringPane.tsx` | **Wiring** tab — walk-scope graph plus Chase on outside callers |
+| `server/commentary.ts`              | Private notes in `data/commentary/` (this app folder only; not the reviewed repo)                                    |
+| `web/`                              | Local UI                                                                                                             |
+| `web/src/components/RolePane.tsx`   | **Role** tab — PR motivation + file role                                                                             |
+| `web/src/components/WiringPane.tsx` | **Wiring** tab — walk-scope graph plus Chase on outside callers                                                      |
 
 
 In Cursor the skill id is `pr-file-walkthrough` so existing triggers keep working. This repo is named `code-review-helper`.
