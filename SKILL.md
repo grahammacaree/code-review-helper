@@ -249,18 +249,16 @@ checkout or for opening the local file.
 | **Role in PR** | One short paragraph: this file’s job in the **whole PR story** — stated motivation (title/body) **and** implicit motivation (what the overview’s “how it connects” implies this file must do). Not a repeat of What/Why. |
 | **Wiring** | Import/export graph **within this PR’s change set**: what this file pulls in (symbols + from which changed paths or key packages) and what it exports to which other changed files. Read `import`/`export` lines; resolve relative paths against the queued/covered list. External packages only when they are the point (new dependency, auth client, etc.). For non-code paths or when nothing parses, say **none** or one line. |
 | **Links** | Queue context: files already covered and upcoming in the walk — complements Wiring (narrative order vs import graph). |
-| **Look closer** | 0–3 **named** functions/methods (or other hotspots) that are complex or novel, and are central to understanding this change. Each entry: **name + line range + why** (new protocol, dense control flow, non-obvious invariant, first of its kind here). On large files, line ranges are **required** — a bare name is not enough to find the spot. If none, say “none”. Not thin wrappers, re-exports, or routine CRUD. |
+| **Look closer** | 0–3 **named** functions/methods (or other hotspots) that are complex or novel, and are central to understanding this change. Each entry: **name + line range + why** (new protocol, dense control flow, non-obvious invariant, first of its kind here). On large files, line ranges are **required** — a bare name is not enough to find the spot. If none, say “none”. Not thin wrappers, re-exports, or routine CRUD. **Behavior pivots:** when the hunk is tiny but the whole point is a semantic choice (e.g. `isRefetching` vs `isFetching`, manual refresh flag vs query `isRefetching`), prefer a Look closer entry on that symbol — even a one-liner — with why the wrong alternative fails. Do not leave Look closer as “none” on those files. |
 | **Could have** | 0–2 **design forks** on this file only when there was a real choice (API shape, layer, library, sync vs async), and when the code or surrounding context gives evidence that this was an intentional design choice. One line each: plausible alternative + short tradeoff vs what they shipped. If the file is obvious or there's no fork, say “none”. Not a teach-back requirement — counterfactual review, not “you should have done X.” |
 | **Uh oh** | 0–3 watch-outs: bugs, missing tests, risky edges, surprising coupling. Prioritize the highest-leverage risks implied by the code. Might be wrong. If none, say “none”. Do not invent. |
 
-When Look closer is not none and the file is hard to hold in one mental
-model (several interlocking helpers, a state machine, parse → transform →
-emit, etc.), you **may** add a short **Map** under Look closer: 2–5 lines
-of how those pieces call each other or order the work. Judgment call —
-only when the names alone would leave the behavior opaque. Do not invent
-architecture diagrams for simple files. **Map** is in-file control flow;
-**Wiring** is cross-file imports/exports — use both when the change spans
-files, not as duplicates of the same sentence.
+**Map** (optional under Look closer) — two shapes; use when useful, omit when not:
+
+1. **In-file Map** — when Look closer is not none and the file is hard to hold in one mental model (several interlocking helpers, a state machine, parse → transform → emit, etc.): 2–5 lines of how those pieces call each other or order the work. Only when the names alone would leave the behavior opaque.
+2. **Sibling Map** — when this file is one of two or more call sites that solve the **same** PR UX differently (e.g. home binds refresh to `isRefetching`, article uses local manual refresh to avoid mount flash): 2–4 lines naming the sibling path(s) and the divergence. Put this on the later sibling (or both if needed). Do not invent architecture diagrams for simple files.
+
+**Map** is connection narrative (in-file control flow or cross-surface strategy). **Wiring** is import/export graph — use both when useful, not as duplicates of the same sentence. Styles/barrel files: prefer Role/Wiring (“presentation contract for EmptyState used by offline/not-found in `withQueryStates`”) over inventing an in-file Map of layout rules.
 
 Look closer, Could have, and Uh oh are different buckets. The same
 function may appear in Look closer and Uh oh; Could have is about
@@ -277,7 +275,9 @@ only when this file actually has it:
   imports whom among changed paths — before diving into hotspots.
 - **Look closer:** the behavioral contract (inputs, outputs, invariants,
   why it is shaped that way), with line ranges on large files; optional
-  Map when interlocking pieces need a path through the file.
+  Map when interlocking pieces need a path through the file **or** when
+  sibling call sites diverge on the same UX; behavior-pivot symbols belong
+  here even if the hunk is one line.
 - **Uh oh:** highest-leverage risks implied by the code (correctness,
   missing coverage, coupling) — not a tour of every review dimension.
 - **Could have:** evidenced design forks only.
@@ -293,21 +293,33 @@ If **Look closer** is not none and the host can open files, jump to the
 first hotspot’s line range (`#L<start>` or `#L<start>-L<end>`) as well as
 the file’s Focus ranges.
 
-End every file turn with the teach-back prompt from [templates.md](templates.md). Require a paraphrase of **what** + **why** solid enough to tell a teammate. **Role in PR** and **Wiring** help them place the file — welcome in the paraphrase but not required verbatim. If Look closer named hotspots, **prefer** asking about them by name (and may point at the line range) — naming them is a plus, not a hard gate when the file-level explanation is already solid. If a Map was given, how the pieces connect is welcome in the same paraphrase, not a separate gate. Do not advance on “next” / “lgtm” alone.
+End every file turn with the teach-back prompt from [templates.md](templates.md).
+Match depth to **file role** (styles stay in the walk — lighter bar, not skipped):
+
+| File role | Teach-back bar |
+|---|---|
+| **Behavior pivot** (tiny hunk, semantic API choice — wrong flag/signal would regress UX) | Prefer they name the **wrong alternative** and why it fails. Nudge the Look closer symbol. Treat “what + why” that misses the pivot as thin. |
+| **Shared gate / wiring** (HOC, shared query wrapper, central module) | what + why + roughly who consumes it / Empty vs Error (or equivalent) split. |
+| **Screen / route** | what the user sees + which signal drives refresh/retry if this PR touches that. |
+| **Styles / barrel** | Tokens vs magic numbers, shared layout with sibling state components, barrel as public entry — not property-by-property. |
+
+**Role in PR** and **Wiring** help them place the file — welcome in the paraphrase but not required verbatim. If Look closer named hotspots, **prefer** asking about them by name (and may point at the line range). On **behavior pivots**, naming the pivot (or the wrong alternative) is expected for a pass when Look closer called it out. On other files, hotspot names remain a plus, not a hard gate when the file-level explanation is solid. If a Map (in-file or sibling) was given, how the pieces connect is welcome in the same paraphrase, not a separate gate. Do not advance on “next” / “lgtm” alone.
 
 ## Teach-back gate (hard blocker)
 
 Do **not** advance on “next”, “ok”, “lgtm”, or emoji alone.
 
-**Per file:** require a real paraphrase of **what** + **why**. Role in PR,
-Wiring, Look closer names (and Map connections, when shown) are a **plus**,
-not a hard requirement — pass a solid file-level explanation even if they
-do not recite import paths or hotspot names. Line ranges are there so they
-can find the spot when they want to dig in. Connections to other files are
-optional but encouraged.
+**Per file:** require a real paraphrase of **what** + **why**, scaled to file role
+(table above). Role in PR, Wiring, and Map connections are a **plus** on most
+files. On **behavior pivots**, missing the semantic choice (e.g. treating
+`isRefetching` as “just a loading flag” with no contrast to `isFetching`) is
+**thin** — correct once and stay. On styles/barrels, pass a solid intent-level
+explanation without demanding every style key. Line ranges are there so they
+can dig in. Connections to other files are optional but encouraged.
 
-**Final:** require a real paraphrase of the whole PR — what it does, why
-it exists, and how the pieces connect (dependencies + call chain).
+**Final:** require a real paraphrase of the whole PR — use the wrap-up
+checklist in [templates.md](templates.md) (user outcome → shared gate →
+surface differences → optional open question).
 
 - Thin or wrong: correct the gap in one short beat, ask them to fill the
   missing piece, stay on the same file (or on the final summary).
@@ -321,9 +333,10 @@ it exists, and how the pieces connect (dependencies + call chain).
   the walkthrough.)
 
 “Good enough” means they could explain it to a teammate, not that they
-recited the card. Do not fail a solid what/why only because Look closer
-names were skipped. Do not require them to cover Could have, Uh oh, or
-review-checklist items that were not in the card.
+recited the card. Do not fail a solid what/why on a normal file only because
+Look closer names were skipped. Do fail (as thin) a pivot-file teach-back that
+never engages the wrong-alternative. Do not require them to cover Could have,
+Uh oh, or review-checklist items that were not in the card.
 
 ## Questions and inline notes (review Q&A)
 
@@ -348,9 +361,18 @@ as understanding the existing diff.
 
 After the last file, do **not** restate the opening overview. Give
 lingering uh-ohs (compact, evidence-backed, or “none”). If any file had
-a non-none **Could have**, add a short **Design forks** list (file +
-fork in one line each). Then ask them to summarise the PR in their own
-words: what it does, why, how the files and dependencies connect.
+a non-none **Could have**, add a short **Design forks** list — **at most
+1–2** high-value forks (file + fork in one line each), not a catalog of
+every Could have from the walk. Then ask for a structured summary in their
+own words, covering all four beats (see [templates.md](templates.md)):
+
+1. **User outcome** — what failed/empty/refresh (or equivalent) feels like after merge.
+2. **Shared gate** — name the glue module (e.g. `withQueryStates`) and the main contract (`refetch`, Empty vs Error, etc.).
+3. **Surface differences** — where call sites diverge (e.g. home vs article refresh signals).
+4. **Open question** (optional) — one thing they would still ask the author.
+
+A product-only summary that never names the shared gate or a real divergence
+is **thin** — one short correction, stay on wrap-up.
 
 If the summary is thin or wrong: same gate as a file — one short
 correction, stay here. When it’s good enough: one-line confirm, offer to
@@ -387,6 +409,13 @@ confusion.
 - Do not treat Look closer as Uh oh (or flag every new function).
 - Do not give Look closer entries without line ranges on large files.
 - Do not invent a Map on thin or obvious files.
+- Do not omit a sibling Map when two screens in this PR solve the same UX
+  with different signals — call the divergence out on at least one of them.
+- Do not leave Look closer as “none” on a one-line behavior pivot whose
+  whole point is the wrong alternative.
+- Do not accept a wrap-up that only restates the product story with no
+  shared gate and no surface divergence (treat as thin).
+- Do not dump every Could have into wrap-up Design forks — at most 1–2.
 - Do not duplicate Role in PR and What/Why with the same sentences.
 - Do not paste every import line in Wiring — only paths/symbols that matter
   for understanding this PR.

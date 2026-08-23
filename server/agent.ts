@@ -202,7 +202,8 @@ export async function generateFileCard(opts: {
       "Call publish_file_card once. Stay on this file.",
       "what: concrete change. why: why this file had to change.",
       "roleInPr: one short paragraph on this file's purpose relative to the PR's stated and implicit motivation — not a repeat of what/why.",
-      "lookCloser: 0–3 named hotspots (complex/novel/central) with line ranges.",
+      "lookCloser: 0–3 named hotspots (complex/novel/central) with line ranges. Behavior pivots: if the hunk is tiny but the point is a semantic choice (wrong flag/signal would regress UX), put that symbol in lookCloser and phrase why with the wrong alternative (e.g. 'vs isFetching — pagination would flash RefreshControl') — do not leave lookCloser empty on those files.",
+      "map: optional. In-file: how lookCloser pieces connect when interlocking. Sibling: when this file and another queued/covered path solve the same UX differently, 2–4 lines naming the sibling and the divergence. Omit when not useful. Styles/barrels: prefer roleInPr over inventing a layout map.",
       "couldHave: 0–2 evidenced design forks, or empty.",
       "uhOh: 0–3 evidence-backed watch-outs with line ranges, or empty. Do not invent.",
       opts.entry.kind === "deleted"
@@ -308,6 +309,13 @@ export async function generateFileCard(opts: {
   };
 }
 
+/** Heuristic: Look closer "why" describes a wrong-alternative / signal choice. */
+function isBehaviorPivotWhy(why: string): boolean {
+  return /\b(vs\.?|versus|rather than|instead of|wrong|alternative|not\s+is[A-Z]|avoids?|would (?:flash|regress|break|spin))\b/i.test(
+    why,
+  );
+}
+
 export async function gradeTeachback(opts: {
   agent: LocalAgent;
   text: string;
@@ -316,14 +324,42 @@ export async function gradeTeachback(opts: {
 }): Promise<TeachbackResult> {
   const holder: { value?: TeachbackResult } = {};
   const hotspot = opts.card?.lookCloser.map((h) => h.name).join(", ");
+  const pivotEntries = (opts.card?.lookCloser ?? []).filter((h) =>
+    isBehaviorPivotWhy(h.why),
+  );
+  const pivotHint = pivotEntries
+    .map((h) => `${h.name}: ${h.why}`)
+    .join("; ");
+  const siblingMap = opts.card?.map?.trim();
   const run = await opts.agent.send(
     [
       opts.stage === "file"
-        ? `Grade this teach-back for ${opts.card?.path}. Pass if they explained what the file does and why it changed, in their own words, well enough to tell a teammate. Do not fail them for skipping Look closer names when the overall explanation is solid.${hotspot ? ` Mentioning ${hotspot} is a plus, not a gate.` : ""}`
-        : "Grade the final PR summary: what it does, why it exists, how the pieces connect.",
+        ? [
+            `Grade this teach-back for ${opts.card?.path}.`,
+            "Pass if they explained what the file does and why it changed, in their own words, well enough to tell a teammate.",
+            "Scale expectations to file role: styles/barrels need intent-level understanding (tokens, shared layout, public entry), not property-by-property recitation.",
+            "Shared gates/screens: what + why (+ roughly who consumes / which signal) is enough.",
+            pivotHint
+              ? `Behavior pivot Look closer — ${pivotHint}. If their paraphrase never engages that semantic choice (or the wrong alternative), grade thin — do not pass a vague “loading flag” summary.`
+              : "Do not fail them for skipping Look closer names when the overall explanation is solid.",
+            hotspot && !pivotHint
+              ? `Mentioning ${hotspot} is a plus, not a gate.`
+              : "",
+            siblingMap
+              ? `A Map was on the card (may be sibling divergence). Connecting to other surfaces is a plus, not required if file-level explanation is solid.`
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ")
+        : [
+            "Grade the final PR summary.",
+            "Pass only if they cover: (1) user outcome after merge, (2) the shared gate/module by name and its contract, (3) how call sites diverge if they do.",
+            "Product-only summaries that never name the glue module or any surface divergence are thin.",
+            "An optional open question for the author is welcome, not required.",
+          ].join(" "),
       "Call grade_teachback once. adequate = could explain to a teammate. thin = stay. question_before = asked before paraphrasing. question_after = paraphrased then asked.",
       opts.card
-        ? `Card what: ${opts.card.what}\nCard why: ${opts.card.why}`
+        ? `Card what: ${opts.card.what}\nCard why: ${opts.card.why}${opts.card.roleInPr ? `\nRole in PR: ${opts.card.roleInPr}` : ""}${siblingMap ? `\nMap: ${siblingMap}` : ""}`
         : "",
       "Reviewer said:",
       opts.text,

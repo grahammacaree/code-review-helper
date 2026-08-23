@@ -81,7 +81,7 @@ until then.
 **Links:** [already covered: …] [upcoming: …]
 
 **Look closer:** [`parseNextCursorFromLinkHeader` L42–L68 — [why]] or **none**
-**Map:** [optional 2–5 lines: how Look closer pieces connect / order of work — only if interlocking; else omit]
+**Map:** [optional — in-file: how Look closer pieces connect; **or** sibling: how this screen’s refresh/error path differs from `path/to/sibling.tsx` — only if useful; else omit]
 
 **Could have:** [0–2 design forks: alternative + tradeoff vs what shipped, or **none**]
 
@@ -92,15 +92,21 @@ until then.
 Before we continue: in your own words, what does this file change do, and why was it needed? Reply with that (or questions). Say **next** only after you’ve explained it — I won’t advance on “next” alone.
 ```
 
-When Look closer is not none, you **may** add a nudge toward the hotspot (still not a hard gate):
+When Look closer is a **behavior pivot** (semantic flag/signal choice), prefer a teach-back that invites the wrong alternative:
+
+```markdown
+Before we continue: in your own words, what does this file change do, and why was it needed? In particular, why `[symbol]` rather than the obvious alternative — what breaks if you use the wrong signal? Reply with that (or questions). Say **next** only after you’ve explained it — I won’t advance on “next” alone.
+```
+
+When Look closer is not none (and not only a pivot nudge), you **may** add a milder hotspot nudge (still not a hard gate on non-pivot files):
 
 ```markdown
 Before we continue: in your own words, what does this file change do, and why was it needed? If it helps, say what `[Name]` (around L[n]) does — naming it is a plus, not required if the file-level explanation is solid. Reply with that (or questions). Say **next** only after you’ve explained it — I won’t advance on “next” alone.
 ```
 
-If a Map was shown, you may invite how those pieces fit together in the same paraphrase — still optional depth, not a second gate.
+If a **sibling Map** was shown, you may invite the divergence in the same paraphrase — still one gate, not a second quiz.
 
-When Look closer is none, keep the first teach-back paragraph.
+When Look closer is none, keep the first teach-back paragraph. For **styles/barrel** files, the first paragraph is enough; do not demand property-by-property recitation.
 
 ## Teach-back: inadequate
 
@@ -183,15 +189,25 @@ Stopping here. Want me to check out `[starting-branch]` again?
 
 ## Wrap-up
 
-Do not restate the opening overview. Uh-ohs, then their summary.
+Do not restate the opening overview. Uh-ohs, then their structured summary.
+Design forks: at most 1–2 high-value items, or omit the section.
 
 ```markdown
 **Lingering uh-ohs:** [compact list, or “none”]
 
-**Design forks:** [only if any file had Could have — file + fork in one line each, or omit section]
+**Design forks:** [at most 1–2 — file + fork in one line each — or omit]
 
-That’s the files. In your own words: what does this PR do, why does it exist, and how do the pieces (and their dependencies) connect? I won’t close out on “done” alone.
+That’s the files. In your own words, cover:
+1. **User outcome** — what this changes for someone using the app after merge
+2. **Shared gate** — which module owns the shared contract (name it) and what that contract is
+3. **Surface differences** — where call sites diverge (if they do)
+4. **Open question** (optional) — one thing you’d still ask the author
+
+I won’t close out on “done” alone.
 ```
+
+A summary that only restates the product story with no shared gate and no
+real divergence is thin — correct once and stay on wrap-up.
 
 ## Wrap-up: adequate
 
