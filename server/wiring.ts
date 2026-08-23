@@ -1,5 +1,5 @@
 import { dirname, join } from "node:path";
-import { readWorktreeFile } from "./git.js";
+import { gitGrepFiles, readWorktreeFile } from "./git.js";
 
 /** Static import/export graph for one file within a PR walk scope. */
 export type WiringSymbolKind =
@@ -144,6 +144,83 @@ export function formatWiringNote(w: FileWiring): string | undefined {
   lines.push(`- **Into this file:** ${into.length ? into.join("; ") : "none"}`);
   lines.push(`- **Out of this file:** ${out.length ? out.join("; ") : "none"}`);
   return lines.join("\n");
+}
+
+export interface OutsideImporter {
+  path: string;
+  names: string[];
+}
+
+const MAX_CHASE_GREP = 80;
+const MAX_CHASE_HITS = 3;
+
+/**
+ * Unchanged files (outside walk scope) that import this module.
+ * Used to offer an opt-in chase, not to expand the default wiring graph.
+ */
+export async function findOutsideImporters(opts: {
+  repoPath: string;
+  targetPath: string;
+  exportNames: string[];
+  exclude: Set<string>;
+  signal?: AbortSignal;
+}): Promise<OutsideImporter[]> {
+  if (!isWiringCodePath(opts.targetPath) || opts.exportNames.length === 0) {
+    return [];
+  }
+  const stem = importStem(opts.targetPath);
+  if (!stem) return [];
+  const escaped = stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const hits = (
+    await gitGrepFiles(
+      opts.repoPath,
+      escaped,
+      ["*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs"],
+      opts.signal,
+    )
+  ).slice(0, MAX_CHASE_GREP);
+
+  const known = new Set([opts.targetPath]);
+  const exportSet = new Set(opts.exportNames);
+  const out: OutsideImporter[] = [];
+
+  for (const path of hits) {
+    if (out.length >= MAX_CHASE_HITS) break;
+    if (path === opts.targetPath || opts.exclude.has(path)) continue;
+    if (!isWiringCodePath(path)) continue;
+    let text: string;
+    try {
+      text = await readWorktreeFile(opts.repoPath, path);
+    } catch {
+      continue;
+    }
+    const imports = parseImports(text, path, known);
+    const names = new Set<string>();
+    for (const imp of imports) {
+      if (!imp.resolvedPath || !pathsMatch(imp.resolvedPath, opts.targetPath)) {
+        continue;
+      }
+      for (const n of imp.names) {
+        if (n === "*") {
+          for (const exp of opts.exportNames) names.add(exp);
+        } else if (exportSet.has(n) || n === "default") {
+          names.add(n);
+        }
+      }
+    }
+    if (names.size) out.push({ path, names: [...names] });
+  }
+  return out;
+}
+
+function importStem(path: string): string {
+  const base = path.split("/").pop() || "";
+  const noExt = base.replace(/\.(tsx?|jsx?|mjs|cjs)$/i, "");
+  if (noExt === "index") {
+    const parts = path.split("/").filter(Boolean);
+    return parts.length >= 2 ? parts[parts.length - 2]! : noExt;
+  }
+  return noExt;
 }
 
 function consumersFromIndex(

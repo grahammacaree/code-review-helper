@@ -15,6 +15,18 @@ Teach the change set so the reviewer’s approval is earned, not skimmed.
 This is not an automated defect hunt and not a ship checklist — but it
 **is** preparation for the real GitHub approve / request-changes step.
 
+Two postures, one walk. On a repo they already own, slightly bend uh-ohs
+toward the questions they are expected to catch (isolation, cache, the
+seams that matter *here*). On a repo they are catching up on, spend that
+same attention on the teachable big picture — what kind of app this is,
+how data and failures move — not only local trivia. Derive that bias
+from the checkout (docs, stack). Do not invent house law.
+
+Wiring among changed files is the default graph so the walk stays
+teachable. Unchanged callers of a changed contract are still in play:
+watch for them, offer a thin opt-in chase, do not auto-queue the rest of
+the repo, and do not read “no importers in walk scope” as unused.
+
 Stay read-only on **code and review comments**. Do not post GitHub review
 comments, push, or fix code unless they explicitly ask. **Exception:**
 optional GitHub “Viewed” flags as navigation (see Focus the file list).
@@ -34,8 +46,8 @@ Copy the output shapes from [templates.md](templates.md).
    and offer quit / core-only / walk all. Do not start the overview
    until they pick.
 3. Opening turn: robust overview (what / why / dependencies /
-   connections) + ordered file queue. Stop. Do not start file 1 until
-   they say go / start.
+   connections / repo kind + Watch for) + ordered file queue. Stop. Do
+   not start file 1 until they say go / start.
 4. One file card per turn (what / why / role in PR / wiring / links /
    look closer / could have / uh oh), plus a **per-file** GitHub **Diff**
    link when useful. Open the **local file** in the editor beside the chat.
@@ -155,6 +167,13 @@ shape in [templates.md](templates.md):
   this relies on; what has to exist first.
 - **How it connects** — the call chain / data flow across the queued
   files (e.g. route → handler → client → registry → tests → docs).
+- **Repo** — what this checkout is (mobile app, website front-end,
+  backend, mixed), from manifests and docs — not a guess. Then **Watch
+  for**: 0–5 seams from `AGENTS.md` / `CONTRIBUTING` / Cursor rules, or
+  from that kind (isolation, cache, client vs server, offline, authz).
+  Bias later uh-ohs when the hunk hits the seam. Not a new teach-back
+  gate. Do not invent house rules that are not in the docs or implied
+  by the stack.
 - **Queue** — dependency / call-chain order: types/config → core logic →
   callers → tests → docs. Not GitHub’s alphabetical order.
 - Skip or batch noise only after they confirm (lockfile churn, generated
@@ -247,11 +266,11 @@ checkout or for opening the local file.
 | **What** | Concrete change in this file (behavior, API, structure). Not a line dump. |
 | **Why** | Why this file had to change for the PR’s goal. |
 | **Role in PR** | One short paragraph: this file’s job in the **whole PR story** — stated motivation (title/body) **and** implicit motivation (what the overview’s “how it connects” implies this file must do). Not a repeat of What/Why. |
-| **Wiring** | Import/export graph **within this PR’s change set**: what this file pulls in (symbols + from which changed paths or key packages) and what it exports to which other changed files. Read `import`/`export` lines; resolve relative paths against the queued/covered list. External packages only when they are the point (new dependency, auth client, etc.). For non-code paths or when nothing parses, say **none** or one line. |
+| **Wiring** | Import/export graph **within this PR’s change set** (the default graph): what this file pulls in (symbols + from which changed paths or key packages) and what it exports to which other changed files. Read `import`/`export` lines; resolve relative paths against the queued/covered list. External packages only when they are the point (new dependency, auth client, etc.). For non-code paths or when nothing parses, say **none** or one line. **“No importers in walk scope” means none in this walk, not unused in the product.** If a modified export looks like a contract change (signature, return/error shape, flag meaning) and callers may live outside the queue, say so and offer a **chase** — do not silently skip blast radius. |
 | **Links** | Queue context: files already covered and upcoming in the walk — complements Wiring (narrative order vs import graph). |
 | **Look closer** | 0–3 **named** functions/methods (or other hotspots) that are complex or novel, and are central to understanding this change. Each entry: **name + line range + why** (new protocol, dense control flow, non-obvious invariant, first of its kind here). On large files, line ranges are **required** — a bare name is not enough to find the spot. If none, say “none”. Not thin wrappers, re-exports, or routine CRUD. **Behavior pivots:** when the hunk is tiny but the whole point is a semantic choice (e.g. `isRefetching` vs `isFetching`, manual refresh flag vs query `isRefetching`), prefer a Look closer entry on that symbol — even a one-liner — with why the wrong alternative fails. Do not leave Look closer as “none” on those files. |
 | **Could have** | 0–2 **design forks** on this file only when there was a real choice (API shape, layer, library, sync vs async), and when the code or surrounding context gives evidence that this was an intentional design choice. One line each: plausible alternative + short tradeoff vs what they shipped. If the file is obvious or there's no fork, say “none”. Not a teach-back requirement — counterfactual review, not “you should have done X.” |
-| **Uh oh** | 0–3 watch-outs: bugs, missing tests, risky edges, surprising coupling. Prioritize the highest-leverage risks implied by the code. Might be wrong. If none, say “none”. Do not invent. |
+| **Uh oh** | 0–3 watch-outs: bugs, missing tests, risky edges, surprising coupling. Prioritize the highest-leverage risks implied by the code. If the overview named repo Watch for items, prefer those when this hunk actually hits that seam. Might be wrong. If none, say “none”. Do not invent. |
 
 **Map** (optional under Look closer) — two shapes; use when useful, omit when not:
 
@@ -270,7 +289,8 @@ Review texture lives in those buckets — do not add extra card
 sections or extra teach-back questions. Put it where it belongs,
 only when this file actually has it:
 
-- **Overview / large-PR gate:** size, split-worthiness, generated noise.
+- **Overview / large-PR gate:** size, split-worthiness, generated noise;
+  repo kind + Watch for (docs or stack — not invented house law).
 - **Role in PR / Wiring:** where this file sits in the PR story and who
   imports whom among changed paths — before diving into hotspots.
 - **Look closer:** the behavioral contract (inputs, outputs, invariants,
@@ -304,6 +324,16 @@ Match depth to **file role** (styles stay in the walk — lighter bar, not skipp
 | **Styles / barrel** | Tokens vs magic numbers, shared layout with sibling state components, barrel as public entry — not property-by-property. |
 
 **Role in PR** and **Wiring** help them place the file — welcome in the paraphrase but not required verbatim. If Look closer named hotspots, **prefer** asking about them by name (and may point at the line range). On **behavior pivots**, naming the pivot (or the wrong alternative) is expected for a pass when Look closer called it out. On other files, hotspot names remain a plus, not a hard gate when the file-level explanation is solid. If a Map (in-file or sibling) was given, how the pieces connect is welcome in the same paraphrase, not a separate gate. Do not advance on “next” / “lgtm” alone.
+
+## Blast radius (opt-in chase)
+
+The parsed wiring graph is the walk (queued + covered). Checkout exists so they can follow definitions **outside** that graph.
+
+When this file changes an exported contract and Wiring has no in-walk importers — or you know unchanged call sites exist — **explicitly watch** for blast radius. Do not auto-insert every consumer into the numbered queue.
+
+Offer a **chase**: they opt in. Insert at most a few unchanged paths after the current file. Chase cards are **thin** (why we are looking, what this site still assumes, uh-oh only if the new contract does not hold). No full what/why/role teach-back unless they want it. Skip / done-looking is enough. Do not recurse chase-on-chase.
+
+Side questions (“who else calls `foo`?”) remain the lighter path when they only want an answer, not a card.
 
 ## Teach-back gate (hard blocker)
 
@@ -419,9 +449,15 @@ confusion.
 - Do not duplicate Role in PR and What/Why with the same sentences.
 - Do not paste every import line in Wiring — only paths/symbols that matter
   for understanding this PR.
+- Do not treat “no importers in walk scope” as unused in the product.
+- Do not auto-queue every unchanged caller — chase is opt-in and thin.
+- Do not require full teach-back on a chase card unless they want it.
 - Do not require teach-back on Could have (optional counterfactual).
 - Do not invent extra review-checklist prompts (tests, ops, consistency,
   rollout) as card sections or teach-back gates.
+- Do not invent repo-specific constraints that are not in docs or implied
+  by the stack (mobile vs website vs backend). Kind-level Watch for items
+  are questions at the seam, not laws. Do not quiz teach-back on them.
 - Do not post GitHub comments unless asked.
 - Do not submit a PR review (Approve / Comment / Request changes) as
   part of this walk. Viewed flags only, and only optionally.

@@ -627,6 +627,12 @@ textarea:focus {
   font-size: var(--label);
 }
 
+.chase-btn {
+  margin-left: 0.5rem;
+  font-size: 0.8em;
+  padding: 0.15rem 0.45rem;
+}
+
 .code {
   margin: 0;
   padding: 0.35rem 0;

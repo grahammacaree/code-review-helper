@@ -1,6 +1,16 @@
-import type { FileWiring, WiringExport, WiringImport } from "../types";
+import type { ChaseCandidate, FileWiring, WiringExport, WiringImport } from "../types";
 
-export function WiringPane({ wiring }: { wiring?: FileWiring }) {
+export function WiringPane({
+  wiring,
+  chaseCandidates,
+  onChase,
+  disabled,
+}: {
+  wiring?: FileWiring;
+  chaseCandidates?: ChaseCandidate[];
+  onChase?: (path: string) => void;
+  disabled?: boolean;
+}) {
   if (!wiring) {
     return (
       <p className="muted context-pane">
@@ -37,9 +47,37 @@ export function WiringPane({ wiring }: { wiring?: FileWiring }) {
         </ul>
       )}
       <p className="muted wiring-foot">
-        Consumers are other queued or covered files in this walk that import
-        these symbols.
+        Consumers listed here are other queued or covered files in this walk.
+        Unchanged callers live outside this graph.
       </p>
+      {chaseCandidates && chaseCandidates.length > 0 && onChase && (
+        <>
+          <h3>Outside this walk</h3>
+          <ul className="wiring-list">
+            {chaseCandidates.map((c) => (
+              <li key={c.path}>
+                <code title={c.path}>{shortPath(c.path)}</code>
+                <span className="muted"> still imports </span>
+                {c.names.map((n, i) => (
+                  <span key={n}>
+                    {i > 0 ? ", " : null}
+                    <code>{n}</code>
+                  </span>
+                ))}
+                <button
+                  type="button"
+                  className="secondary chase-btn"
+                  disabled={disabled}
+                  aria-label={`Chase ${c.path}`}
+                  onClick={() => onChase(c.path)}
+                >
+                  Chase
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }
@@ -76,7 +114,7 @@ function ExportRow({ exp }: { exp: WiringExport }) {
           ))}
         </>
       ) : (
-        <span className="muted"> · no importers in this PR</span>
+        <span className="muted"> · no importers in walk scope</span>
       )}
     </li>
   );

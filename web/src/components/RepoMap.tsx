@@ -115,7 +115,7 @@ function TreeItem({
     return (
       <li className={`tree-file ${state}`}>
         <code>{node.name}</code>
-        <span className="kind">{node.file.kind[0]}</span>
+        <span className="kind">{node.file.chase ? "c" : node.file.kind[0]}</span>
       </li>
     );
   }

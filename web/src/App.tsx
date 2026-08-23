@@ -160,6 +160,7 @@ export function App() {
     else if (action === "all") void run((signal) => api.large(id, "all", signal));
     else if (action === "start") void run((signal) => api.start(id, signal));
     else if (action === "skip") void run((signal) => api.skip(id, signal));
+    else if (action === "chase") void run((signal) => api.chase(id, undefined, signal));
     else if (action === "next") void run((signal) => api.next(id, signal));
     else if (action === "restore") void run((signal) => api.restore(id, signal));
   }
@@ -210,6 +211,11 @@ export function App() {
             diffText={session?.diffText}
             fileWiring={session?.fileWiring}
             overview={session?.overview}
+            chaseCandidates={session?.chaseCandidates}
+            onChase={(path) => {
+              if (!session) return;
+              void run((signal) => api.chase(session.id, [path], signal));
+            }}
             focusLine={focusLine}
             walkNote={walkNote}
             tab={tab}

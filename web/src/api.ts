@@ -64,6 +64,8 @@ export const api = {
     post(id, "teachback", { text }, signal),
   next: (id: string, signal?: AbortSignal) => post(id, "next", undefined, signal),
   skip: (id: string, signal?: AbortSignal) => post(id, "skip", undefined, signal),
+  chase: (id: string, paths?: string[], signal?: AbortSignal) =>
+    post(id, "chase", paths ? { paths } : {}, signal),
   restore: (id: string, signal?: AbortSignal) =>
     post(id, "restore", undefined, signal),
   quit: (id: string, signal?: AbortSignal) => post(id, "quit", undefined, signal),

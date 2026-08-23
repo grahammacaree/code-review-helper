@@ -9,6 +9,7 @@ export type ChipAction =
   | "all"
   | "start"
   | "skip"
+  | "chase"
   | "next"
   | "restore"
   | "reset";
@@ -170,6 +171,9 @@ function promptFor(session: SessionSnapshot | null): string {
   if (session?.phase === "wrapup") {
     return "What does this PR do, why does it exist, and how do the pieces connect?";
   }
+  if (session?.card?.chase) {
+    return "Optional notes — or Done looking. No paraphrase required.";
+  }
   return "What does this file change, and why was it needed?";
 }
 
@@ -194,14 +198,35 @@ function chipsFor(
         { action: "start", label: "Start file 1", primary: true },
         { action: "quit", label: "Quit" },
       ];
-    case "file":
+    case "file": {
+      const pending = (session.chaseCandidates ?? []).filter(
+        (c) => !session.queue.includes(c.path) && !session.covered.includes(c.path),
+      );
+      const chasing = Boolean(session.card?.chase);
       return [
         ...(session.teachback?.kind === "question_after"
           ? [{ action: "next" as const, label: "Next file", primary: true }]
           : []),
-        { action: "skip", label: "Skip this file" },
-        { action: "quit", label: "Quit" },
+        ...(!chasing && pending.length
+          ? [
+              {
+                action: "chase" as const,
+                label:
+                  pending.length === 1
+                    ? "Chase outside caller"
+                    : `Chase ${pending.length} outside callers`,
+                primary: true,
+              },
+            ]
+          : []),
+        {
+          action: "skip" as const,
+          label: chasing ? "Done looking" : "Skip this file",
+          primary: chasing,
+        },
+        { action: "quit" as const, label: "Quit" },
       ];
+    }
     case "wrapup":
       return [{ action: "quit", label: "Quit" }];
     case "done":

@@ -11,9 +11,11 @@ const NOISE_PATH_RE =
   /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun.lockb|Cargo.lock|go\.sum|poetry.lock|composer.lock)$|(^|\/)(dist|build|coverage|\.next|generated)\/|\.(min|bundle)\.(js|css)$|\.snap$/i;
 
 export class GitError extends Error {
-  constructor(message: string) {
+  code?: string | number;
+  constructor(message: string, code?: string | number) {
     super(message);
     this.name = "GitError";
+    this.code = code;
   }
 }
 
@@ -47,6 +49,7 @@ async function run(
     }
     throw new GitError(
       (e.stderr || e.message || `${command} failed`).trim(),
+      e.code,
     );
   }
 }
@@ -57,6 +60,52 @@ export async function git(
   signal?: AbortSignal,
 ): Promise<string> {
   return run(cwd, "git", args, signal);
+}
+
+/** Paths with a grep hit. Empty array when nothing matches (git exits 1). */
+export async function gitGrepFiles(
+  cwd: string,
+  pattern: string,
+  globs: string[],
+  signal?: AbortSignal,
+): Promise<string[]> {
+  try {
+    const out = await git(
+      cwd,
+      ["grep", "-l", "-I", "-E", "-e", pattern, "--", ...globs],
+      signal,
+    );
+    return out
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch (err) {
+    if (err instanceof GitError && (err.code === 1 || err.code === "1")) {
+      return [];
+    }
+    throw err;
+  }
+}
+
+export async function originUrl(cwd: string): Promise<string | undefined> {
+  try {
+    const raw = (await git(cwd, ["remote", "get-url", "origin"])).trim();
+    return normalizeOrigin(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeOrigin(raw: string): string {
+  let s = raw.replace(/\.git$/i, "");
+  const ssh = s.match(/^git@([^:]+):(.+)$/);
+  if (ssh) return `${ssh[1]}/${ssh[2]}`.toLowerCase();
+  try {
+    const u = new URL(s);
+    return `${u.host}${u.pathname}`.replace(/\/$/, "").toLowerCase();
+  } catch {
+    return s.toLowerCase();
+  }
 }
 
 export async function isGitRepo(cwd: string): Promise<boolean> {

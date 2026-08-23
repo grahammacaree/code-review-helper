@@ -5,9 +5,11 @@ import {
   answerAnnotation,
   createReviewAgent,
   generateFileCard,
+  generateChaseCard,
   generateOverview,
   gradeTeachback,
   answerFileQuestion,
+  updateWalkCommentary,
 } from "./agent.js";
 import { runFunction } from "./probe.js";
 import { suggestArgs } from "./samples.js";
@@ -34,12 +36,19 @@ import {
   walkQueue,
   wrapupFromCards,
 } from "./scaffold.js";
+import { formatRepoLens, loadRepoLens } from "./repoLens.js";
+import {
+  coachNoteForUi,
+  loadCommentary,
+  type CommentaryBundle,
+} from "./commentary.js";
 import type { RiskHit } from "./risk.js";
 import { readAllSessions, writeSession } from "./store.js";
 import type {
   Annotation,
   AnnotationKind,
   ChatMessage,
+  ChaseCandidate,
   FileCard,
   FileEntry,
   FileWiring,
@@ -51,7 +60,7 @@ import type {
   SessionSnapshot,
   TeachbackResult,
 } from "./types.js";
-import { analyzeFileWiring, buildImportIndex, formatWiringNote } from "./wiring.js";
+import { analyzeFileWiring, buildImportIndex, findOutsideImporters, formatWiringNote } from "./wiring.js";
 import type { WiringImport } from "./wiring.js";
 
 type LocalAgent = Awaited<ReturnType<typeof createReviewAgent>>;
@@ -89,9 +98,12 @@ interface Session {
   agent?: LocalAgent;
   paraphrasedCurrent: boolean;
   homeRestored: boolean;
+  commentaryWritten: boolean;
   cancel?: AbortController;
   wiringImportIndex?: Map<string, WiringImport[]>;
   wiringImportScopeKey?: string;
+  commentary?: CommentaryBundle;
+  chaseCandidates: ChaseCandidate[];
 }
 
 const sessions = new Map<string, Session>();
@@ -105,6 +117,7 @@ function persist(s: Session): void {
     fileWiring,
     wiringImportIndex,
     wiringImportScopeKey,
+    commentary,
     busy,
     workingOn,
     ...rest
@@ -161,6 +174,9 @@ function hydrate(raw: unknown): Session | undefined {
     files: o.files ?? [],
     queue: o.queue ?? [],
     covered: o.covered ?? [],
+    chaseCandidates: Array.isArray(o.chaseCandidates)
+      ? o.chaseCandidates
+      : [],
     overview: o.overview,
     card: o.card,
     cards: o.cards ?? [],
@@ -173,6 +189,7 @@ function hydrate(raw: unknown): Session | undefined {
     busy: false,
     error: o.error,
     paraphrasedCurrent: Boolean(o.paraphrasedCurrent),
+    commentaryWritten: Boolean(o.commentaryWritten),
     homeRestored:
       Boolean(o.homeRestored) ||
       (o.messages ?? []).some(
@@ -203,6 +220,7 @@ function snapshot(s: Session): SessionSnapshot {
     files: s.files,
     queue: s.queue,
     covered: s.covered,
+    chaseCandidates: s.chaseCandidates,
     messages: s.messages,
     annotations: s.annotations,
     probe: s.probe,
@@ -267,8 +285,29 @@ async function computeFileWiring(s: Session): Promise<FileWiring | undefined> {
   });
   s.card = {
     ...s.card,
-    wiringNote: formatWiringNote(wiring),
+    wiringNote: s.card.chase
+      ? s.card.wiringNote
+      : formatWiringNote(wiring),
   };
+  s.chaseCandidates = [];
+  if (!s.card.chase && s.card.kind !== "deleted") {
+    const names = wiring.exports
+      .filter((exp) => exp.kind !== "reexport")
+      .map((exp) => exp.name);
+    if (names.length) {
+      try {
+        s.chaseCandidates = await findOutsideImporters({
+          repoPath: s.repoPath,
+          targetPath: s.card.path,
+          exportNames: names,
+          exclude: new Set(wiringScope(s)),
+          signal: signalOf(s),
+        });
+      } catch {
+        s.chaseCandidates = [];
+      }
+    }
+  }
   return wiring;
 }
 
@@ -416,11 +455,13 @@ export async function startSession(input: {
     files: [],
     queue: [],
     covered: [],
+    chaseCandidates: [],
     cards: [],
     messages: [],
     annotations: [],
     busy: false,
     paraphrasedCurrent: false,
+    commentaryWritten: false,
     homeRestored: false,
   };
   sessions.set(id, s);
@@ -500,6 +541,12 @@ async function runOverview(s: Session, mode: "all" | "core"): Promise<void> {
   throwIfAborted(s);
   s.workingOn = "Mapping the PR…";
   const branch = await currentBranch(s.repoPath);
+  const lens = await loadRepoLens(
+    s.repoPath,
+    s.files.map((f) => f.path),
+  );
+  const repoNote = formatRepoLens(lens);
+  const commentary = await ensureCommentary(s);
   s.overview = await withAgent(s, (agent) =>
     generateOverview({
       agent,
@@ -511,8 +558,14 @@ async function runOverview(s: Session, mode: "all" | "core"): Promise<void> {
       prBody: s.prBody,
       assetsNote: assetsNote(s.files),
       noiseNote: noiseNote(s.files, batched, riskPinned),
+      repoNote,
+      commentary,
     }),
   );
+  s.overview = {
+    ...s.overview,
+    coachNote: coachNoteForUi(commentary),
+  };
   s.queue = s.overview.queue;
   invalidateWiringIndex(s);
   s.phase = "overview";
@@ -596,6 +649,7 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
     s.diffText = undefined;
     s.fileWiring = undefined;
     s.focusLine = undefined;
+    s.chaseCandidates = [];
     s.phase = "wrapup";
     push(s, {
       role: "assistant",
@@ -609,20 +663,34 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
   const entry = s.files.find((f) => f.path === path);
   if (!entry) throw new Error(`Unknown queued file: ${path}`);
   s.workingOn = `Writing file card ${index + 1}/${s.queue.length}…`;
-  const card = await withAgent(s, (agent) =>
-    generateFileCard({
-      agent,
-      cwd: s.repoPath,
-      entry,
-      index: index + 1,
-      total: s.queue.length,
-      queue: s.queue,
-      covered: s.covered,
-      baseRef: s.baseRef || "main",
-      prUrl: s.prUrl,
-      overview: s.overview,
-    }),
-  );
+  const commentary = await ensureCommentary(s);
+  const card = entry.chase
+    ? await withAgent(s, (agent) =>
+        generateChaseCard({
+          agent,
+          cwd: s.repoPath,
+          entry,
+          index: index + 1,
+          total: s.queue.length,
+          queue: s.queue,
+          covered: s.covered,
+        }),
+      )
+    : await withAgent(s, (agent) =>
+        generateFileCard({
+          agent,
+          cwd: s.repoPath,
+          entry,
+          index: index + 1,
+          total: s.queue.length,
+          queue: s.queue,
+          covered: s.covered,
+          baseRef: s.baseRef || "main",
+          prUrl: s.prUrl,
+          overview: s.overview,
+          commentary,
+        }),
+      );
   s.card = card;
   s.phase = "file";
   try {
@@ -680,6 +748,26 @@ export async function submitTeachback(
 
   push(s, { role: "user", kind: "text", text: trimmed });
 
+  if (s.phase === "file" && s.card?.chase && !looksLikeQuestion(trimmed)) {
+    return withBusy(s, async () => {
+      s.teachback = {
+        adequate: true,
+        kind: "adequate",
+        message: "Noted. Chase cards do not need a full teach-back.",
+      };
+      push(s, {
+        role: "assistant",
+        kind: "teachback",
+        text: s.teachback.message,
+      });
+      s.paraphrasedCurrent = true;
+      if (s.card && !s.covered.includes(s.card.path)) {
+        s.covered.push(s.card.path);
+      }
+      await advanceToFile(s, s.covered.length);
+    });
+  }
+
   if (looksLikeQuestion(trimmed)) {
     return withBusy(s, () => replyToQuestion(s, trimmed));
   }
@@ -713,6 +801,7 @@ export async function submitTeachback(
       }
     } else if (result.kind === "adequate" || result.kind === "question_after") {
       s.phase = "done";
+      await maybeWriteCommentary(s);
       push(s, {
         role: "assistant",
         kind: "status",
@@ -762,13 +851,17 @@ export async function skipFile(id: string): Promise<SessionSnapshot> {
   push(s, {
     role: "user",
     kind: "text",
-    text: `Skip ${s.card.path}`,
+    text: s.card.chase
+      ? `Done looking at ${s.card.path}`
+      : `Skip ${s.card.path}`,
   });
   s.covered.push(s.card.path);
   s.teachback = {
     adequate: true,
     kind: "adequate",
-    message: `Skipped ${s.card.path}.`,
+    message: s.card.chase
+      ? `Done looking at ${s.card.path}.`
+      : `Skipped ${s.card.path}.`,
   };
   push(s, {
     role: "assistant",
@@ -778,6 +871,135 @@ export async function skipFile(id: string): Promise<SessionSnapshot> {
   return withBusy(s, async () => {
     await advanceToFile(s, s.covered.length);
   });
+}
+
+export async function startChase(
+  id: string,
+  paths?: string[],
+): Promise<SessionSnapshot> {
+  const s = get(id);
+  if (s.phase !== "file" || !s.card) {
+    throw new Error("Open a file before chasing callers.");
+  }
+  if (s.card.chase) {
+    throw new Error("Chase does not recurse. Finish this caller first.");
+  }
+  const wanted = paths?.length
+    ? s.chaseCandidates.filter((c) => paths.includes(c.path))
+    : s.chaseCandidates;
+  const pending = wanted
+    .filter((c) => !s.queue.includes(c.path) && !s.covered.includes(c.path))
+    .slice(0, 3);
+  if (!pending.length) {
+    throw new Error("No outside callers left to chase.");
+  }
+  const from = s.card.path;
+  const at = s.queue.indexOf(from);
+  const insertAt = at >= 0 ? at + 1 : s.queue.length;
+  const added: string[] = [];
+  for (const hit of pending) {
+    s.queue.splice(insertAt + added.length, 0, hit.path);
+    added.push(hit.path);
+    if (!s.files.some((f) => f.path === hit.path)) {
+      s.files.push({
+        path: hit.path,
+        kind: "modified",
+        noise: false,
+        asset: false,
+        chase: true,
+        chaseFrom: from,
+        chaseNames: hit.names,
+      });
+    }
+  }
+  invalidateWiringIndex(s);
+  s.chaseCandidates = s.chaseCandidates.filter(
+    (c) => !added.includes(c.path),
+  );
+  push(s, {
+    role: "user",
+    kind: "text",
+    text: `Chase ${added.join(", ")}`,
+  });
+  push(s, {
+    role: "assistant",
+    kind: "status",
+    text: `Queued chase after this file: ${added.map((p) => `\`${p}\``).join(", ")}. Thin cards — skip or done looking is enough.`,
+  });
+  persist(s);
+  return snapshot(s);
+}
+
+async function ensureCommentary(s: Session): Promise<CommentaryBundle> {
+  if (!s.commentary) {
+    s.commentary = await loadCommentary(s.repoPath);
+  }
+  return s.commentary;
+}
+
+function commentaryEvidence(s: Session): string {
+  const files = s.cards.map((c) => {
+    const uhs = (c.uhOh ?? []).map((u) => u.text).join("; ");
+    const what = (c.what || "").slice(0, 240);
+    return `- ${c.path}: ${what}${uhs ? ` | uh-oh: ${uhs.slice(0, 200)}` : ""}`;
+  });
+  const skips = s.messages
+    .filter(
+      (m) =>
+        m.role === "user" &&
+        typeof m.text === "string" &&
+        m.text.startsWith("Skip "),
+    )
+    .map((m) => m.text);
+  const wrapIdx = s.messages.findIndex((m) => m.kind === "wrapup");
+  const wrapParaphrase =
+    wrapIdx >= 0
+      ? s.messages
+          .slice(wrapIdx + 1)
+          .filter((m) => m.role === "user" && m.kind === "text")
+          .map((m) => m.text)
+          .join("\n")
+          .slice(0, 2000)
+      : "";
+  const lingering = s.wrapup?.lingeringUhOhs || "";
+  return [
+    s.prTitle ? `PR: ${s.prTitle}` : "",
+    s.prUrl ? `URL: ${s.prUrl}` : "",
+    `Checkout: ${s.repoPath}`,
+    s.overview
+      ? `What's happening: ${s.overview.whatsHappening.slice(0, 600)}`
+      : "",
+    s.overview ? `Why: ${s.overview.why.slice(0, 400)}` : "",
+    `Covered: ${s.covered.join(", ") || "(none)"}`,
+    `Files:\n${files.join("\n") || "(none)"}`,
+    skips.length ? `Skipped:\n${skips.join("\n")}` : "",
+    lingering ? `Lingering uh-ohs:\n${lingering.slice(0, 1500)}` : "",
+    wrapParaphrase
+      ? `Wrap-up from Graham:\n${wrapParaphrase}`
+      : "(no wrap-up paraphrase yet)",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/** Private notes stay in this app's data/ folder — never the reviewed tree. */
+async function maybeWriteCommentary(s: Session): Promise<void> {
+  if (s.commentaryWritten) return;
+  if (!s.cards.length && !s.wrapup) return;
+  try {
+    const bundle = await ensureCommentary(s);
+    await withAgent(s, (agent) =>
+      updateWalkCommentary({
+        agent,
+        bundle,
+        evidence: commentaryEvidence(s),
+      }),
+    );
+    s.commentaryWritten = true;
+    s.commentary = await loadCommentary(s.repoPath);
+  } catch {
+    // Best-effort. A failed notes rewrite must not fail the walk.
+  }
 }
 
 function restoreTarget(s: Session): string {
@@ -797,6 +1019,7 @@ export async function restoreBranch(
     text: `Restore ${branch}`,
   });
   return withBusy(s, async () => {
+    await maybeWriteCommentary(s);
     await checkoutBranch(s.repoPath, branch);
     s.phase = "done";
     s.homeRestored = true;
@@ -1009,14 +1232,15 @@ export async function cancelWork(id: string): Promise<SessionSnapshot> {
 export async function quit(id: string): Promise<SessionSnapshot> {
   const s = get(id);
   push(s, { role: "user", kind: "text", text: "Quit" });
-  s.phase = "done";
-  await s.agent?.close();
-  s.agent = undefined;
-  push(s, {
-    role: "assistant",
-    kind: "status",
-    text: `Stopped. Restore ${restoreTarget(s)} if the tree is clean.`,
-  });
-  persist(s);
-  return snapshot(s);
+  return withBusy(s, async () => {
+    s.phase = "done";
+    await maybeWriteCommentary(s);
+    await s.agent?.close();
+    s.agent = undefined;
+    push(s, {
+      role: "assistant",
+      kind: "status",
+      text: `Stopped. Restore ${restoreTarget(s)} if the tree is clean.`,
+    });
+  }, "Updating private notes…");
 }

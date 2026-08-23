@@ -1,6 +1,6 @@
 import { Agent, Cursor, CursorAgentError } from "@cursor/sdk";
 import { cursorApiKey, cursorModel } from "./env.js";
-import { fileDiff, githubDiffUrl, parseFocusFromDiff } from "./git.js";
+import { fileDiff, githubDiffUrl, parseFocusFromDiff, readWorktreeFile } from "./git.js";
 import { fileLinks } from "./scaffold.js";
 import type {
   FileCard,
@@ -9,6 +9,13 @@ import type {
   TeachbackKind,
   TeachbackResult,
 } from "./types.js";
+import {
+  commentaryPromptBlock,
+  emptyRepoTemplate,
+  emptyUserTemplate,
+  saveCommentary,
+  type CommentaryBundle,
+} from "./commentary.js";
 
 type LocalAgent = Awaited<ReturnType<typeof Agent.create>>;
 
@@ -79,6 +86,8 @@ export async function generateOverview(opts: {
   prBody?: string;
   assetsNote?: string;
   noiseNote?: string;
+  repoNote?: string;
+  commentary?: CommentaryBundle;
 }): Promise<Overview> {
   const holder: { prose?: Pick<
     Overview,
@@ -98,7 +107,8 @@ export async function generateOverview(opts: {
       "whatsHappening: concrete behavior after merge.",
       "why: the problem or request this PR exists for.",
       "dependencies: upstream systems, packages, config, endpoints.",
-      "howItConnects: call chain / data flow across the queued files.",
+      "howItConnects: call chain / data flow across the queued files. Do not repeat the repo watch list.",
+      commentaryPromptBlock(opts.commentary),
       `Branch: ${opts.branch}`,
       opts.prUrl ? `PR URL: ${opts.prUrl}` : "No PR URL.",
       opts.prTitle ? `PR title: ${opts.prTitle}` : "",
@@ -154,6 +164,7 @@ export async function generateOverview(opts: {
     queue: opts.queue,
     assetsNote: opts.assetsNote,
     noiseNote: opts.noiseNote,
+    repoNote: opts.repoNote,
   };
 }
 
@@ -168,6 +179,7 @@ export async function generateFileCard(opts: {
   baseRef: string;
   prUrl?: string;
   overview?: Overview;
+  commentary?: CommentaryBundle;
 }): Promise<FileCard> {
   const hunks = await fileDiff(opts.cwd, opts.baseRef, opts.entry.path, {
     context: 0,
@@ -193,7 +205,12 @@ export async function generateFileCard(opts: {
     ? [
         `PR why: ${opts.overview.why}`,
         `How the queued files connect: ${opts.overview.howItConnects}`,
-      ].join("\n")
+        opts.overview.repoNote
+          ? `Repo bias (tilt uh-ohs when this file hits the seam; do not invent rules; do not add sections):\n${opts.overview.repoNote}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
     : "";
 
   const run = await opts.agent.send(
@@ -205,11 +222,12 @@ export async function generateFileCard(opts: {
       "lookCloser: 0–3 named hotspots (complex/novel/central) with line ranges. Behavior pivots: if the hunk is tiny but the point is a semantic choice (wrong flag/signal would regress UX), put that symbol in lookCloser and phrase why with the wrong alternative (e.g. 'vs isFetching — pagination would flash RefreshControl') — do not leave lookCloser empty on those files.",
       "map: optional. In-file: how lookCloser pieces connect when interlocking. Sibling: when this file and another queued/covered path solve the same UX differently, 2–4 lines naming the sibling and the divergence. Omit when not useful. Styles/barrels: prefer roleInPr over inventing a layout map.",
       "couldHave: 0–2 evidenced design forks, or empty.",
-      "uhOh: 0–3 evidence-backed watch-outs with line ranges, or empty. Do not invent.",
+      "uhOh: 0–3 evidence-backed watch-outs with line ranges, or empty. Do not invent. If a repo watch list was given, use it only when this hunk actually hits that seam.",
       opts.entry.kind === "deleted"
         ? "File was deleted; do not invent current contents."
         : "",
       overviewBits,
+      commentaryPromptBlock(opts.commentary),
       `Hunks:\n${diff || "(empty diff)"}`,
     ]
       .filter(Boolean)
@@ -305,6 +323,150 @@ export async function generateFileCard(opts: {
     links,
     index: opts.index,
     total: opts.total,
+    ...holder.prose,
+  };
+}
+
+export async function generateChaseCard(opts: {
+  agent: LocalAgent;
+  cwd: string;
+  entry: FileEntry;
+  index: number;
+  total: number;
+  queue: string[];
+  covered: string[];
+}): Promise<FileCard> {
+  const from = opts.entry.chaseFrom || "the changed file";
+  const names = (opts.entry.chaseNames || []).join(", ") || "the changed export";
+  let caller = "";
+  try {
+    caller = await readWorktreeFile(opts.cwd, opts.entry.path);
+  } catch {
+    caller = "";
+  }
+  if (caller.length > AGENT_DIFF_CHARS) {
+    caller = `${caller.slice(0, AGENT_DIFF_CHARS)}\n…[truncated]`;
+  }
+  let source = "";
+  try {
+    source = await readWorktreeFile(opts.cwd, from);
+  } catch {
+    source = "";
+  }
+  if (source.length > 4000) {
+    source = `${source.slice(0, 4000)}\n…[truncated]`;
+  }
+  const links = fileLinks(
+    opts.covered,
+    opts.queue.slice(opts.index),
+  );
+  const holder: {
+    prose?: Pick<FileCard, "what" | "why" | "lookCloser" | "uhOh">;
+  } = {};
+
+  const run = await opts.agent.send(
+    [
+      `Chase (unchanged caller, not in this PR): ${opts.entry.path}`,
+      `Still imports {${names}} from ${from}.`,
+      "Call publish_chase_card once. Stay thin.",
+      "why: the contract that changed (signature, error shape, flag meaning).",
+      "what: what this call site still assumes about that contract.",
+      "lookCloser: 0–1 hotspot with line range if you can see the import/use, else empty.",
+      "uhOh: only if the new contract does not hold here; otherwise empty. Do not invent.",
+      "Do not write a full what/why/role teach-back card. No couldHave. No map.",
+      source ? `Changed module (truncated):\n${source}` : "",
+      caller ? `Caller (truncated):\n${caller}` : "Could not read the caller from disk.",
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+    {
+      local: {
+        customTools: {
+          publish_chase_card: {
+            description: "Publish a thin chase card. Call once.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                why: { type: "string" },
+                what: { type: "string" },
+                lookCloser: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      name: { type: "string" },
+                      startLine: { type: "number" },
+                      endLine: { type: "number" },
+                      why: { type: "string" },
+                    },
+                    required: ["name", "startLine", "endLine", "why"],
+                  },
+                },
+                uhOh: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      text: { type: "string" },
+                      startLine: { type: "number" },
+                      endLine: { type: "number" },
+                    },
+                    required: ["text", "startLine", "endLine"],
+                  },
+                },
+              },
+              required: ["why", "what"],
+            },
+            execute: (args) => {
+              holder.prose = {
+                why: String(args.why),
+                what: String(args.what),
+                lookCloser: Array.isArray(args.lookCloser)
+                  ? (args.lookCloser as {
+                      name: string;
+                      startLine: number;
+                      endLine: number;
+                      why: string;
+                    }[])
+                  : [],
+                uhOh: Array.isArray(args.uhOh)
+                  ? (args.uhOh as {
+                      text: string;
+                      startLine: number;
+                      endLine: number;
+                    }[])
+                  : [],
+              };
+              return "Chase card recorded. Stop.";
+            },
+          },
+        },
+      },
+    },
+  );
+
+  const result = await waitRun(run);
+  if (!holder.prose) {
+    throw new Error(missingTool("publish_chase_card", result));
+  }
+  const look = holder.prose.lookCloser;
+  return {
+    path: opts.entry.path,
+    kind: opts.entry.kind,
+    focus:
+      look.length > 0
+        ? look.map((h) => ({ start: h.startLine, end: h.endLine }))
+        : [],
+    links,
+    index: opts.index,
+    total: opts.total,
+    chase: true,
+    chaseFrom: opts.entry.chaseFrom,
+    chaseNames: opts.entry.chaseNames,
+    roleInPr: undefined,
+    map: undefined,
+    couldHave: [],
+    wiringNote: `Unchanged caller of \`${from}\` (${names}). Not in this PR.`,
     ...holder.prose,
   };
 }
@@ -499,6 +661,66 @@ export async function answerAnnotation(opts: {
     throw new Error(missingTool("publish_reply", result));
   }
   return holder.value;
+}
+
+export async function updateWalkCommentary(opts: {
+  agent: LocalAgent;
+  bundle: CommentaryBundle;
+  evidence: string;
+}): Promise<void> {
+  const priorUser = opts.bundle.userMarkdown.trim() || emptyUserTemplate();
+  const priorRepo =
+    opts.bundle.repoMarkdown.trim() ||
+    emptyRepoTemplate({
+      origin: opts.bundle.origin,
+      repoPath: opts.bundle.repoPath,
+    });
+  const holder: { user?: string; repo?: string } = {};
+  const run = await opts.agent.send(
+    [
+      "Rewrite Graham's private walkthrough notes after this PR walk.",
+      "These files live only in the walkthrough app. They are never written into the git repo under review.",
+      "Address Graham. Be kind and specific. Be firm about gaps. Never contemptuous, sarcastic, or demeaning. Do not call him stupid, lazy, or hopeless. Do not pile on. Prefer 'this still slips' over 'you always miss this.'",
+      "Merge with prior notes: keep what still looks true, drop what this walk disproved, add at most a few new bullets. Keep each file under ~150 lines. No secrets, tokens, or pasted source.",
+      "user.md: cross-repo craft patterns — what he does well, what he is still working on. Not a repo diary.",
+      "repo.md: this checkout only — PRs walked, what he has picked up here, what is still thin, nudges for the next walk (catch-mode vs catch-up).",
+      "Call publish_commentary once with the full replacement markdown for both files.",
+      `Prior user.md:\n${priorUser}`,
+      `Prior repo.md:\n${priorRepo}`,
+      `This walk:\n${opts.evidence}`,
+    ].join("\n\n"),
+    {
+      local: {
+        customTools: {
+          publish_commentary: {
+            description: "Publish updated private notes. Call once.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                userMarkdown: { type: "string" },
+                repoMarkdown: { type: "string" },
+              },
+              required: ["userMarkdown", "repoMarkdown"],
+            },
+            execute: (args) => {
+              holder.user = String(args.userMarkdown);
+              holder.repo = String(args.repoMarkdown);
+              return "Notes recorded. Stop.";
+            },
+          },
+        },
+      },
+    },
+  );
+  const result = await waitRun(run);
+  if (!holder.user || !holder.repo) {
+    throw new Error(missingTool("publish_commentary", result));
+  }
+  await saveCommentary({
+    key: opts.bundle.key,
+    userMarkdown: holder.user,
+    repoMarkdown: holder.repo,
+  });
 }
 
 type RunResult = Awaited<

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type {
   Annotation,
+  ChaseCandidate,
   FileCard,
   FileWiring,
   FnBlock,
@@ -36,6 +37,8 @@ export function FileInspect({
   onSuggestArgs,
   onLookCloser,
   onCloseWalkNote,
+  chaseCandidates,
+  onChase,
 }: {
   card?: FileCard;
   fileText?: string;
@@ -65,6 +68,8 @@ export function FileInspect({
   ) => Promise<ProbeArgSuggestion>;
   onLookCloser: (hotspot: LookCloser) => void;
   onCloseWalkNote: () => void;
+  chaseCandidates?: ChaseCandidate[];
+  onChase?: (path: string) => void;
 }) {
   const [sel, setSel] = useState<{
     startLine: number;
@@ -219,7 +224,12 @@ export function FileInspect({
           ) : tab === "role" ? (
             <RolePane card={card} overview={overview} />
           ) : tab === "wiring" ? (
-            <WiringPane wiring={fileWiring} />
+            <WiringPane
+              wiring={fileWiring}
+              chaseCandidates={card.chase ? [] : chaseCandidates}
+              onChase={card.chase ? undefined : onChase}
+              disabled={busy}
+            />
           ) : (
           <FilePane
             path={card.path}

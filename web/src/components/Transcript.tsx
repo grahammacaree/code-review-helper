@@ -89,6 +89,18 @@ function OverviewBody({ overview }: { overview: Overview }) {
       <Prose text={overview.dependencies} />
       <h2>How it connects</h2>
       <Prose text={overview.howItConnects} />
+      {overview.repoNote && (
+        <>
+          <h2>Repo</h2>
+          <Prose text={overview.repoNote} />
+        </>
+      )}
+      {overview.coachNote && (
+        <>
+          <h2>Your notes</h2>
+          <Prose text={overview.coachNote} />
+        </>
+      )}
       <h2>Queue</h2>
       <ol className="queue">
         {overview.queue.map((path) => (
@@ -125,7 +137,11 @@ function FileBody({
   return (
     <>
       <h2>
-        File {card.index} of {card.total}: <code>{card.path}</code> — {card.kind}
+        {card.chase ? "Chase" : `File ${card.index} of ${card.total}`}:{" "}
+        <code>{card.path}</code>
+        {card.chase
+          ? " — unchanged caller"
+          : ` — ${card.kind}`}
         {card.oldPath ? (
           <>
             {" "}
@@ -133,6 +149,13 @@ function FileBody({
           </>
         ) : null}
       </h2>
+      {card.chase && card.chaseFrom && (
+        <p className="muted">
+          Still imports{" "}
+          {(card.chaseNames || []).join(", ") || "a changed export"} from{" "}
+          <code>{card.chaseFrom}</code>. Skip or done looking is enough.
+        </p>
+      )}
       {card.focus.length > 0 && (
         <p className="muted">
           Focus: {card.focus.map((r) => `L${r.start}–L${r.end}`).join(", ")}
@@ -143,10 +166,10 @@ function FileBody({
           <a href={card.diffUrl}>GitHub Diff for this path</a>
         </p>
       )}
-      <h3>What</h3>
-      <Prose text={card.what} />
-      <h3>Why</h3>
-      <Prose text={card.why} />
+      <h3>{card.chase ? "Why we're looking" : "What"}</h3>
+      <Prose text={card.chase ? card.why : card.what} />
+      <h3>{card.chase ? "What this site still assumes" : "Why"}</h3>
+      <Prose text={card.chase ? card.what : card.why} />
       {card.roleInPr && (
         <>
           <h3>Role in PR</h3>
@@ -159,30 +182,38 @@ function FileBody({
           <Prose text={card.wiringNote} />
         </>
       )}
-      <h3>Links</h3>
-      <p className="muted">Already covered</p>
-      <PathList items={links.covered} />
-      <p className="muted">Upcoming</p>
-      <PathList items={links.upcoming} />
-      <h3>Look closer</h3>
-      {card.lookCloser.length === 0 ? (
-        <p>None.</p>
-      ) : (
-        <ul>
-          {card.lookCloser.map((h) => (
-            <li key={`${h.name}-${h.startLine}`}>
-              <button
-                type="button"
-                className="hotspot"
-                onClick={() => onLookCloser(h)}
-              >
-                <code>{h.name}</code> L{h.startLine}–L{h.endLine}
-              </button>
-              {" — "}
-              <Inline text={h.why} />
-            </li>
-          ))}
-        </ul>
+      {!card.chase && (
+        <>
+          <h3>Links</h3>
+          <p className="muted">Already covered</p>
+          <PathList items={links.covered} />
+          <p className="muted">Upcoming</p>
+          <PathList items={links.upcoming} />
+        </>
+      )}
+      {(card.lookCloser.length > 0 || !card.chase) && (
+        <>
+          <h3>Look closer</h3>
+          {card.lookCloser.length === 0 ? (
+            <p>None.</p>
+          ) : (
+            <ul>
+              {card.lookCloser.map((h) => (
+                <li key={`${h.name}-${h.startLine}`}>
+                  <button
+                    type="button"
+                    className="hotspot"
+                    onClick={() => onLookCloser(h)}
+                  >
+                    <code>{h.name}</code> L{h.startLine}–L{h.endLine}
+                  </button>
+                  {" — "}
+                  <Inline text={h.why} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
       {card.map && (
         <>
@@ -190,8 +221,12 @@ function FileBody({
           <Prose text={card.map} />
         </>
       )}
-      <h3>Could have</h3>
-      <NoteList items={card.couldHave} />
+      {!card.chase && (
+        <>
+          <h3>Could have</h3>
+          <NoteList items={card.couldHave} />
+        </>
+      )}
       <h3>Uh oh</h3>
       {card.uhOh.length === 0 ? (
         <p>None.</p>

@@ -15,6 +15,12 @@ Use these shapes verbatim. Fill the brackets; do not add extra sections.
 
 **How it connects:** [call chain / data flow across the queued files]
 
+**Repo:** [mobile app / website front-end / backend / mixed / unclear] — [evidence from package.json, native dirs, or docs]
+
+**Watch for** (bias uh-ohs when the hunk hits the seam; not a quiz):
+- [doc bullet or kind-level question]
+- …
+
 **Queue** (dependency order):
 1. `path/to/file.ts`
 2. `path/to/other.ts`
@@ -77,6 +83,7 @@ until then.
 **Wiring:**
 - **Into this file:** [{symbols} from `path/in/pr` or key package, …] or **none**
 - **Out of this file:** [{export} → `consumer/in/pr`, …] or **none**
+- **Outside this PR:** [`caller/not/in/pr` still imports `{changedExport}`, …] or **none found** — say **chase** for a thin card (opt-in; not an auto-queue)
 
 **Links:** [already covered: …] [upcoming: …]
 
@@ -90,6 +97,24 @@ until then.
 ---
 
 Before we continue: in your own words, what does this file change do, and why was it needed? Reply with that (or questions). Say **next** only after you’ve explained it — I won’t advance on “next” alone.
+```
+
+## Chase card (opt-in, thin)
+
+Unchanged file. No full teach-back unless they keep going.
+
+```markdown
+**Chase** (not in this PR): `path/to/caller.ts` — still imports `{changedExport}` from `path/in/pr`
+
+**Why we're looking:** [contract that changed — signature / error shape / flag meaning]
+
+**What this site still assumes:** [one short paragraph + look-closer line range if you have it]
+
+**Uh oh:** [only if the new contract does not hold here, or **none**]
+
+---
+
+Skip or **done looking** when you have seen enough. No paraphrase required.
 ```
 
 When Look closer is a **behavior pivot** (semantic flag/signal choice), prefer a teach-back that invites the wrong alternative:

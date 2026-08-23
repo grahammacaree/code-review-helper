@@ -14,6 +14,9 @@ export interface FileEntry {
   kind: FileKind;
   noise: boolean;
   asset: boolean;
+  chase?: boolean;
+  chaseFrom?: string;
+  chaseNames?: string[];
 }
 
 export interface LookCloser {
@@ -44,6 +47,8 @@ export interface Overview {
   queue: string[];
   assetsNote?: string;
   noiseNote?: string;
+  repoNote?: string;
+  coachNote?: string;
 }
 
 export interface FileCard {
@@ -63,6 +68,14 @@ export interface FileCard {
   uhOh: UhOh[];
   index: number;
   total: number;
+  chase?: boolean;
+  chaseFrom?: string;
+  chaseNames?: string[];
+}
+
+export interface ChaseCandidate {
+  path: string;
+  names: string[];
 }
 
 export interface Wrapup {
@@ -209,6 +222,7 @@ export interface SessionSnapshot {
   files: FileEntry[];
   queue: string[];
   covered: string[];
+  chaseCandidates?: ChaseCandidate[];
   messages: ChatMessage[];
   annotations: Annotation[];
   probe?: ProbeResult;
