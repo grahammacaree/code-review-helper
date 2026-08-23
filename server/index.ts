@@ -248,7 +248,7 @@ app.post("/api/sessions/:id/probe", async (req, res) => {
 });
 
 void restoreSessions().then(() => {
-  app.listen(serverPort(), () => {
+  app.listen(serverPort(), "127.0.0.1", () => {
     console.log(`Walkthrough API on http://127.0.0.1:${serverPort()}`);
   });
 });

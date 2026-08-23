@@ -51,54 +51,88 @@ Review texture (contracts, risk, size, counterfactuals) lives in those existing 
 
 Uh ohs are not a bot review. They are “look at this if you are going to thumbs-up.”
 
-## Cursor skill
+## Requirements
 
-Clone into Cursor’s personal skills directory (any repo you open will see it):
+You need a **local clone** of the repo under review and a **clean working tree** there. Checkout is the walk. GitHub-in-the-browser is not enough.
+
+Both surfaces need:
+
+- `git`
+- ideally [GitHub CLI](https://cli.github.com/) (`gh`), authenticated (`gh auth login`) so `gh pr checkout` works. Without `gh`, checkout falls back to `git fetch origin pull/<n>/head`.
+
+**Skill** (Cursor, Claude Code, Codex, …): no Node install. The agent that is already running does the walk. It uses *that* product’s account, not this repo’s `.env`.
+
+**Local app** (browser UI): you do **not** need the Cursor IDE. You **do** need:
+
+- [Node.js](https://nodejs.org/) 20+ and npm
+- a [Cursor API key](https://cursor.com/dashboard/api) — cards, teach-back, Q&A, and private-note rewrites go through `@cursor/sdk` and bill to that key
+- macOS or Linux (Windows is untested)
+
+The app never logs into the Cursor desktop app. A key in `.env` is the whole link.
+
+## Skill (any coding agent)
+
+In **Cursor**, clone into the personal skills directory so every repo you open can see it:
 
 ```bash
 git clone git@github.com:grahammacaree/code-review-helper.git ~/.cursor/skills/pr-file-walkthrough
 ```
 
-If that folder already exists, it *is* this project — pull instead of cloning. `SKILL.md` lives at the repo root, so Cursor still discovers the skill even though the repo also contains the app.
+HTTPS: `https://github.com/grahammacaree/code-review-helper.git`. If that folder already exists, it *is* this project — pull instead of cloning. `SKILL.md` lives at the repo root, so Cursor still discovers the skill even though the repo also contains the app.
 
-Requires `git` and ideally the GitHub CLI (`gh`) for PR checkout. Without `gh`, the skill fetches `refs/pull/<n>/head` itself.
+Paste a PR URL or say **walk me through this PR** / **pr-file-walkthrough**. Dirty tree? Switch or stash first; the skill will not checkout over your work. Having GitHub connected in the IDE does **not** skip checkout. Then say **start** after the overview.
 
-In Cursor, paste a PR URL or say **walk me through this PR** / **pr-file-walkthrough**. You need a **clean working tree**. Dirty? Switch or stash first; the skill will not checkout over your work. Having GitHub connected does **not** skip checkout — local files are required. Then say **start** after the overview.
+In **Claude Code, Codex, or similar**: you are already in an agent. Copy `SKILL.md` and `templates.md` into project instructions, or `@`-include them when you review. Open the PR’s clone as the workspace. Same gates: clean tree, checkout, overview, one file, teach-back. You will not get the two-column UI, private `data/commentary/` notes, or the app’s Chase insert — those are app-only. The agent’s own backend is what you pay.
 
-If the PR is large (≥ 20 files or ≥ 1500 lines of real churn, ignoring lockfiles/generated/images), it stops and asks **quit**, **core only** (about 8 load-bearing files, plus any other changed files whose diffs look high-risk — the queue may grow), or **walk all**. That is for AI-sized diffs: forcing every generated file would recreate the glaze. Core-only is not a shortcut past understanding the spine or past obvious foot-guns. When you finish or quit, it offers to put you back on the branch you started from.
+If the PR is large (≥ 20 files or ≥ 1500 lines of real churn, ignoring lockfiles/generated/images), the walk stops and asks **quit**, **core only** (about 8 load-bearing files, plus any other changed files whose diffs look high-risk — the queue may grow), or **walk all**. That is for AI-sized diffs: forcing every generated file would recreate the glaze. Core-only is not a shortcut past understanding the spine or past obvious foot-guns. When you finish or quit, it offers to put you back on the branch you started from.
 
 New SVGs, jpgs, and other pure assets are listed once and skipped. No teach-back on “what is an SVG.”
-
-The review method is not Cursor-specific. `SKILL.md` and `templates.md` are the portable spec:
-
-- **Claude Code / Codex / etc.** — paste into project instructions, or `@`-include the files when reviewing.
-- **Cursor** — install as above; the agent auto-discovers the skill from `~/.cursor/skills/` or `.cursor/skills/`.
 
 The host opens the checked-out file beside the chat when it can — that is the primary surface. On a GitHub PR, each card may also link **that path’s** Diff for hunks (not the whole Files tab). Teach-back and gates still work if the host cannot open files; checkout still happens so disk matches the PR.
 
 ## Local app
 
-The app is a dedicated two-column UI for the same walkthrough. It does not reuse your Cursor desktop login.
-
-1. Mint a user API key at [Cursor Dashboard → API Keys](https://cursor.com/dashboard/api)
-2. `cp .env.example .env`
-3. Set `CURSOR_API_KEY`
-
-Optional: `CURSOR_MODEL` (default `composer-2.5`).
+The app is a dedicated two-column UI for the same walkthrough. Clone this repo somewhere you keep projects — not into `~/.cursor/skills/` unless you also want the skill from that copy.
 
 ```bash
 git clone git@github.com:grahammacaree/code-review-helper.git
 cd code-review-helper
+cp .env.example .env
+```
+
+Put a user key from [Cursor Dashboard → API Keys](https://cursor.com/dashboard/api) in `.env` as `CURSOR_API_KEY`. Optional: `CURSOR_MODEL` (default `composer-2.5`), `PORT` (default `8787`).
+
+```bash
 npm install
 npm run dev
 ```
 
-UI: [http://127.0.0.1:5173](http://127.0.0.1:5173)  
-API: [http://127.0.0.1:8787](http://127.0.0.1:8787)
+Wait until the terminal shows the walkthrough API on port 8787. Vite can proxy `/api` before the API is listening; a refresh after that line is enough.
 
-You need `git` and ideally `gh` on `PATH`. Point the form at a **local clone** and a PR URL or number. The app checks out the PR tip in that repo (clean tree first). Prefer running the app from a projects checkout, not from `~/.cursor/skills/`, if you want that skills folder to stay lean.
+- UI: [http://127.0.0.1:5173](http://127.0.0.1:5173)
+- API: [http://127.0.0.1:8787](http://127.0.0.1:8787)
+
+In the form: path to the **other** repo (the PR’s clone), plus a PR URL or number. The app checks out the PR tip there (clean tree first). Explain files in the box; **Ask** vs teach-back is a mode switch. **New walkthrough** starts a new session.
+
+If the API key is missing, `/api/auth` reports it and cards will not generate. If checkout fails, `gh` is usually not installed or not logged in. Do not expose 5173/8787 off localhost (see Data and security).
 
 Walks persist across refresh and server restart (`data/sessions/`, gitignored; the browser remembers the session id). After a walk, the app also rewrites **private notes** under `data/commentary/` in *this* project (`user.md` for craft across repos, `repos/<origin>.md` for that checkout). Those files never land in the git tree you are reviewing, and they are not part of the Cursor skill. Later walks tilt toward gaps and nudges there — kind and specific, not a public “Graham keeps missing X.” Weaknesses decay: if a walk does not show the gap, it cools off and then drops, so old nags do not stick forever. Familiarity (catch vs catch-up) lives in those notes; the **Repo** overview block is stack/docs Watch for, not a detector of whether you already own the system. **New walkthrough** starts over. The function probe looks for Jest/spec samples and typed fixtures (`const foo: Type = { … }`), not only inline literals. Each file card includes **Role in PR** (agent) and **Wiring** (parsed imports/exports among queued and covered files — “no importers in walk scope” means none *in this walk*, not unused in the product); the right column exposes the same as **Role** and **Wiring** tabs beside **File** and **Diff**. If an unchanged file still imports a changed export, Wiring (and a chip) can **Chase** it: up to three thin cards inserted after the current file (finish this file first), no chase-on-chase, skip / done looking instead of teach-back. Checkout is what lets you click through to those callers. The overview adds a **Repo** note when we can tell what the checkout is (mobile vs website vs backend, plus any `AGENTS.md` / contributing bullets) so uh-ohs tilt toward those seams without extra quiz steps. If you have private notes, the overview also shows a short **Your notes** digest (not the full files). At wrap-up (and when done), **Copy review notes** puts lingering uh-ohs, design forks, and your inline questions/comments on the clipboard as Markdown for pasting into a GitHub review.
+
+## Data and security
+
+This is personal local software, not a hosted product. Treat it that way.
+
+**On this machine.** The Cursor API key lives in `.env` (gitignored). Walk state lives under `data/` in *this* project (also gitignored): `data/sessions/` holds card text, teach-back, inline notes, and PR metadata as JSON; `data/commentary/` holds private craft notes (`user.md`) and per-checkout notes (`repos/<origin>.md`). Full file blobs are not written to those session files — the host re-reads the worktree when you resume. The browser keeps a session id and recent clone paths in `localStorage`. None of that is encrypted at rest.
+
+**Not in the repo under review.** Checkout switches that clone to the PR tip (and can stash if you confirm). The app does not commit, push, or write notes into that tree. Private commentary is the reason: a public repo should not get a file that says what you still miss.
+
+**Off this machine.** Card generation, teach-back grading, Q&A, and commentary rewrites go through the **Cursor API**. That includes diffs, excerpts, PR title/body, and slices of your private notes when they exist. Usage bills to your key. The **skill** is whatever agent is running in the IDE: it sees the workspace you opened and talks to that agent’s backend; it does not use this app’s `data/` folder.
+
+**The local HTTP API.** UI and API bind to `127.0.0.1`. There is no login. Anyone who can reach those ports on your machine can drive a session, including the function probe (which **runs code from the reviewed tree** in a temp harness). Do not expose 5173/8787 to the network.
+
+**GitHub.** The app does not post review comments. The skill stays read-only unless you explicitly ask it to comment. Optional Viewed flags in the skill are navigation only.
+
+Delete `data/` and `.env` if you want a clean slate. `New walkthrough` starts a new session; it does not wipe commentary.
 
 ## What it is not
 
