@@ -62,31 +62,74 @@ export async function saveCommentary(opts: {
 
 /** Short block for the overview UI — not the full private files. */
 export function coachNoteForUi(bundle: CommentaryBundle): string | undefined {
-  const watch = extractSection(bundle.repoMarkdown, ["Watch next"]);
   const matters = extractSection(bundle.repoMarkdown, ["What matters"]);
+  const watch = extractSection(bundle.repoMarkdown, ["Watch next"]);
   const bits = [matters, watch].filter(Boolean);
   if (bits.length) return bits.join("\n\n").slice(0, 1600);
   if (!bundle.repoMarkdown.trim()) return undefined;
   return "You have a private map of this checkout from earlier walks.";
 }
 
+export function craftNoteForUi(bundle: CommentaryBundle): string | undefined {
+  const working = extractSection(bundle.userMarkdown, ["Working on"]);
+  const patterns = extractSection(bundle.userMarkdown, [
+    "Patterns worth keeping",
+    "Patterns",
+  ]);
+  const bits = [working, patterns].filter(Boolean);
+  if (!bits.length) return undefined;
+  return bits.join("\n\n").slice(0, 1600);
+}
+
 export function commentaryPromptBlock(
   bundle: CommentaryBundle | undefined,
 ): string {
-  if (!bundle?.repoMarkdown.trim()) return "";
+  if (!bundle || (!bundle.userMarkdown.trim() && !bundle.repoMarkdown.trim())) {
+    return "";
+  }
   return [
-    "Private checkout map lives in the walkthrough app (`data/commentary/repos/`), never in the git checkout under review.",
-    "Tilt uh-ohs / Look closer toward **What matters here** and **Watch next** when this file actually hits those seams.",
-    "Those notes are about the repo (packages, opt-in callers, fail-open, GSSP vs middleware). They are not a grade of the reviewer. Do not quiz teach-back on them.",
-    "Do not add card sections. Do not invent house law. Do not quote the notes unless a seam is directly relevant.",
-    `Checkout map:\n${clip(bundle.repoMarkdown, 5000)}`,
-  ].join("\n\n");
+    "Private notes live in the walkthrough app (`data/commentary/`), never in the git checkout under review.",
+    "Two files, two jobs: user.md is about Graham’s review craft; repos/*.md is a map of this checkout. Do not mix them.",
+    bundle.repoMarkdown.trim()
+      ? [
+          "Checkout map: tilt uh-ohs / Look closer toward **What matters here** and **Watch next** when this file hits those seams.",
+          "That file is about the codebase (packages, opt-in callers, fail-open). Not a grade of the reviewer. Do not quiz teach-back on it.",
+          `Checkout map:\n${clip(bundle.repoMarkdown, 5000)}`,
+        ].join("\n\n")
+      : "",
+    bundle.userMarkdown.trim()
+      ? [
+          "Craft notes: tilt explanations toward **Working on** when this file actually hits that gap. **Do not hammer** (and quiet gaps) stay quiet unless the hunk hits that seam again.",
+          "Do not add card sections. Do not teach-back the notes. Do not invent character flaws. Do not quote unless a nudge is directly relevant.",
+          `Craft notes (Graham):\n${clip(bundle.userMarkdown, 3500)}`,
+        ].join("\n\n")
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export function emptyUserTemplate(): string {
-  return `# Craft notes
+  return `# Craft notes (Graham)
 
-Unused. Checkout maps live in \`repos/\`. Do not grade the reviewer here.
+Private. Walkthrough app only. Kind, firm, specific. Never contempt.
+About how Graham reviews — not a map of any one repo.
+
+## Patterns worth keeping
+
+(none yet)
+
+## Working on
+
+Gaps with fresh evidence. Tag quiet walks as (quiet: 0). If a walk does not show the gap, increment quiet. After two quiet walks, move to Do not hammer. After it stays quiet there, drop it. Do not keep a weakness forever.
+
+(none yet)
+
+## Do not hammer
+
+Cooled-off gaps. Do not nag cards about these unless this walk hits the seam again — then they can return to Working on.
+
+(none yet)
 `;
 }
 

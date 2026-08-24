@@ -49,6 +49,7 @@ export interface Overview {
   noiseNote?: string;
   repoNote?: string;
   coachNote?: string;
+  craftNote?: string;
 }
 
 export interface FileCard {

@@ -39,6 +39,7 @@ import {
 import { formatRepoLens, loadRepoLens } from "./repoLens.js";
 import {
   coachNoteForUi,
+  craftNoteForUi,
   loadCommentary,
   type CommentaryBundle,
 } from "./commentary.js";
@@ -576,6 +577,7 @@ async function runOverview(s: Session, mode: "all" | "core"): Promise<void> {
   s.overview = {
     ...s.overview,
     coachNote: coachNoteForUi(commentary),
+    craftNote: craftNoteForUi(commentary),
   };
   s.queue = s.overview.queue;
   invalidateWiringIndex(s);
