@@ -97,7 +97,7 @@ function OverviewBody({ overview }: { overview: Overview }) {
       )}
       {overview.coachNote && (
         <>
-          <h2>Your notes</h2>
+          <h2>Repo map</h2>
           <Prose text={overview.coachNote} />
         </>
       )}

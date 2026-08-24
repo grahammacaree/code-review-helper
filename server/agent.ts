@@ -681,27 +681,26 @@ export async function updateWalkCommentary(opts: {
   bundle: CommentaryBundle;
   evidence: string;
 }): Promise<void> {
-  const priorUser = opts.bundle.userMarkdown.trim() || emptyUserTemplate();
   const priorRepo =
     opts.bundle.repoMarkdown.trim() ||
     emptyRepoTemplate({
       origin: opts.bundle.origin,
       repoPath: opts.bundle.repoPath,
     });
-  const holder: { user?: string; repo?: string } = {};
+  const holder: { repo?: string } = {};
   const run = await opts.agent.send(
     [
-      "Rewrite Graham's private walkthrough notes after this PR walk.",
-      "These files live only in the walkthrough app. They are never written into the git repo under review.",
-      "Address Graham. Be kind and specific. Be firm about gaps. Never contemptuous, sarcastic, or demeaning. Do not call him stupid, lazy, or hopeless. Do not pile on. Prefer 'this still slips' over 'you always miss this.'",
-      "Merge with prior notes: keep what still looks true, drop what this walk disproved, add at most a few new bullets. Keep each file under ~150 lines. No secrets, tokens, or pasted source.",
-      "Weaknesses decay. Strengths (Patterns worth keeping / What you've picked up) may stay without fresh proof. Gaps need evidence from this walk.",
-      "user.md Working on: if this walk showed the gap, keep it and set (quiet: 0). If it did not show, increment (quiet: N). After quiet: 2, move the bullet to Do not hammer. If it is already in Do not hammer and still quiet, drop it. If a cooled gap shows again, put it back in Working on at (quiet: 0). Never grow Working on from vibes.",
-      "repo.md Still thin / Nudges: same decay — drop or cool items this walk did not touch. Do not carry a nag across walks that never hit it.",
-      "user.md: cross-repo craft patterns — what he does well, what he is still working on. Not a repo diary.",
-      "repo.md: this checkout only — PRs walked, what he has picked up here, what is still thin, nudges for the next walk (catch-mode vs catch-up).",
-      "Call publish_commentary once with the full replacement markdown for both files.",
-      `Prior user.md:\n${priorUser}`,
+      "Rewrite the private checkout map after this PR walk.",
+      "This file lives only in the walkthrough app. It is never written into the git repo under review.",
+      "Write about the codebase, not the reviewer. Do not grade teach-back, wrap-up quality, naming slips, or 'can you recite X without the diff.' Do not use catch-mode / catch-up quizzes. Do not address Graham in the second person about what he missed.",
+      "Use wrap-up and file cards as evidence of how the code works, not as a score of the walk.",
+      "Keep the file under ~150 lines. No secrets, tokens, or pasted source.",
+      "Shape (headings verbatim): Snapshot; What matters here; Walks; Watch next.",
+      "What matters here: durable architecture — packages, factories, which apps opt in, fail-open vs fail-closed, GSSP vs middleware, where tests actually prove the contract. Merge new facts into this section; drop what this walk disproved. Strengths may stay without repeating the same PR.",
+      "Walks: newest first. One short ### entry per PR (link + title + date if known): what this change revealed about the repo and which seams to look at on a similar PR. Keep at most the last 10 walks. Do not log 'first wrap-up was product-only.'",
+      "Watch next: when a future PR touches X, look at Y (e.g. optional framework option → one caller that sets it and one that leaves it undefined). Repo seams, not recitation prompts.",
+      "If the prior file still has Still thin / Nudges / What you've picked up / craft-about-the-reviewer, migrate codebase facts into What matters / Watch next / Walks and drop the rest.",
+      "Call publish_commentary once with the full replacement markdown.",
       `Prior repo.md:\n${priorRepo}`,
       `This walk:\n${opts.evidence}`,
     ].join("\n\n"),
@@ -709,17 +708,15 @@ export async function updateWalkCommentary(opts: {
       local: {
         customTools: {
           publish_commentary: {
-            description: "Publish updated private notes. Call once.",
+            description: "Publish the updated checkout map. Call once.",
             inputSchema: {
               type: "object",
               properties: {
-                userMarkdown: { type: "string" },
                 repoMarkdown: { type: "string" },
               },
-              required: ["userMarkdown", "repoMarkdown"],
+              required: ["repoMarkdown"],
             },
             execute: (args) => {
-              holder.user = String(args.userMarkdown);
               holder.repo = String(args.repoMarkdown);
               return "Notes recorded. Stop.";
             },
@@ -729,12 +726,12 @@ export async function updateWalkCommentary(opts: {
     },
   );
   const result = await waitRun(run);
-  if (!holder.user || !holder.repo) {
+  if (!holder.repo) {
     throw new Error(missingTool("publish_commentary", result));
   }
   await saveCommentary({
     key: opts.bundle.key,
-    userMarkdown: holder.user,
+    userMarkdown: emptyUserTemplate(),
     repoMarkdown: holder.repo,
   });
 }

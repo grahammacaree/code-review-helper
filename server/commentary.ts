@@ -62,64 +62,31 @@ export async function saveCommentary(opts: {
 
 /** Short block for the overview UI — not the full private files. */
 export function coachNoteForUi(bundle: CommentaryBundle): string | undefined {
-  const repo = extractSection(bundle.repoMarkdown, [
-    "Nudges for next time",
-    "Nudge",
-    "Watch next time",
-  ]);
-  const craft = extractSection(bundle.userMarkdown, [
-    "Working on",
-    "Patterns",
-    "Craft",
-  ]);
-  const bits = [repo, craft].filter(Boolean);
-  if (!bits.length) {
-    if (!bundle.repoMarkdown && !bundle.userMarkdown) return undefined;
-    return "You have private walkthrough notes for this checkout. Later walks will tilt toward them.";
-  }
-  return bits.join("\n\n").slice(0, 1600);
+  const watch = extractSection(bundle.repoMarkdown, ["Watch next"]);
+  const matters = extractSection(bundle.repoMarkdown, ["What matters"]);
+  const bits = [matters, watch].filter(Boolean);
+  if (bits.length) return bits.join("\n\n").slice(0, 1600);
+  if (!bundle.repoMarkdown.trim()) return undefined;
+  return "You have a private map of this checkout from earlier walks.";
 }
 
 export function commentaryPromptBlock(
   bundle: CommentaryBundle | undefined,
 ): string {
-  if (!bundle || (!bundle.userMarkdown && !bundle.repoMarkdown)) return "";
+  if (!bundle?.repoMarkdown.trim()) return "";
   return [
-    "Private reviewer notes live in the walkthrough app (`data/commentary/`), never in the git checkout under review.",
-    "Tilt uh-ohs / Look closer / explanations toward **Working on** / **Still thin** / **Nudges** when this file actually hits them.",
-    "**Do not hammer** (and quiet gaps) are cooling off — do not tilt toward them unless this hunk clearly hits that seam again.",
-    "Do not add card sections. Do not teach-back the notes. Do not invent character flaws. Do not quote the notes unless a nudge is directly relevant.",
-    bundle.userMarkdown
-      ? `Craft notes (Graham):\n${clip(bundle.userMarkdown, 3500)}`
-      : "",
-    bundle.repoMarkdown
-      ? `Repo notes:\n${clip(bundle.repoMarkdown, 5000)}`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+    "Private checkout map lives in the walkthrough app (`data/commentary/repos/`), never in the git checkout under review.",
+    "Tilt uh-ohs / Look closer toward **What matters here** and **Watch next** when this file actually hits those seams.",
+    "Those notes are about the repo (packages, opt-in callers, fail-open, GSSP vs middleware). They are not a grade of the reviewer. Do not quiz teach-back on them.",
+    "Do not add card sections. Do not invent house law. Do not quote the notes unless a seam is directly relevant.",
+    `Checkout map:\n${clip(bundle.repoMarkdown, 5000)}`,
+  ].join("\n\n");
 }
 
 export function emptyUserTemplate(): string {
-  return `# Craft notes (Graham)
+  return `# Craft notes
 
-Private. Walkthrough app only. Kind, firm, specific. Never contempt.
-
-## Patterns worth keeping
-
-(none yet)
-
-## Working on
-
-Gaps with fresh evidence. Tag quiet walks as (quiet: 0). If a walk does not show the gap, increment quiet. After two quiet walks, move to Do not hammer. After it stays quiet there, drop it. Do not keep a weakness forever.
-
-(none yet)
-
-## Do not hammer
-
-Cooled-off gaps. Do not nag cards about these unless this walk hits the seam again — then they can return to Working on.
-
-(none yet)
+Unused. Checkout maps live in \`repos/\`. Do not grade the reviewer here.
 `;
 }
 
@@ -130,21 +97,28 @@ export function emptyRepoTemplate(opts: {
   const who = opts.origin || basename(opts.repoPath);
   return `# ${who}
 
-Private notes for Graham’s walkthroughs of this checkout. Not part of the git repo.
+Private map of this checkout from walks. Not part of the git repo.
+About the codebase — not a diary of teach-back.
 
 ## Snapshot
 
 - Last walk: none yet
 
-## What you’ve picked up
+## What matters here
+
+Durable architecture and review seams. Merge new facts; drop what a later walk disproved.
 
 (none yet)
 
-## Still thin
+## Walks
+
+Newest first. One short entry per PR: what it revealed about this repo, not how the walk went.
 
 (none yet)
 
-## Nudges for next time
+## Watch next
+
+When a future PR touches a related seam, look at these — not recitation prompts.
 
 (none yet)
 `;
