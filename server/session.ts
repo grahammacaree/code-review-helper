@@ -97,6 +97,7 @@ interface Session {
   error?: string;
   agent?: LocalAgent;
   paraphrasedCurrent: boolean;
+  paraphrases: { path: string; text: string }[];
   homeRestored: boolean;
   commentaryWritten: boolean;
   cancel?: AbortController;
@@ -189,6 +190,15 @@ function hydrate(raw: unknown): Session | undefined {
     busy: false,
     error: o.error,
     paraphrasedCurrent: Boolean(o.paraphrasedCurrent),
+    paraphrases: Array.isArray(o.paraphrases)
+      ? o.paraphrases.filter(
+          (p): p is { path: string; text: string } =>
+            Boolean(p) &&
+            typeof p === "object" &&
+            typeof (p as { path?: unknown }).path === "string" &&
+            typeof (p as { text?: unknown }).text === "string",
+        )
+      : [],
     commentaryWritten: Boolean(o.commentaryWritten),
     homeRestored:
       Boolean(o.homeRestored) ||
@@ -461,6 +471,7 @@ export async function startSession(input: {
     annotations: [],
     busy: false,
     paraphrasedCurrent: false,
+    paraphrases: [],
     commentaryWritten: false,
     homeRestored: false,
   };
@@ -735,6 +746,21 @@ export async function askAboutFile(
   return withBusy(s, () => replyToQuestion(s, trimmed));
 }
 
+function priorParaphrases(
+  s: Session,
+): { path: string; text: string }[] {
+  return s.paraphrases.slice(-8).map((p) => ({
+    path: p.path,
+    text: p.text.slice(0, 500),
+  }));
+}
+
+function rememberParaphrase(s: Session, text: string): void {
+  if (!s.card) return;
+  if (s.paraphrases.some((p) => p.path === s.card!.path)) return;
+  s.paraphrases.push({ path: s.card.path, text });
+}
+
 export async function submitTeachback(
   id: string,
   text: string,
@@ -781,6 +807,7 @@ export async function submitTeachback(
           text: trimmed,
           stage: s.phase === "wrapup" ? "wrapup" : "file",
           card: s.card,
+          prior: priorParaphrases(s),
         }),
       ));
     s.teachback = result;
@@ -792,12 +819,16 @@ export async function submitTeachback(
     if (s.phase === "file") {
       if (result.kind === "adequate") {
         s.paraphrasedCurrent = true;
-        if (s.card) s.covered.push(s.card.path);
+        if (s.card) {
+          s.covered.push(s.card.path);
+          rememberParaphrase(s, trimmed);
+        }
         await advanceToFile(s, s.covered.length);
       } else if (result.kind === "question_after" && s.paraphrasedCurrent) {
         // stay; UI shows the answer and a Next control
       } else if (result.kind === "question_after") {
         s.paraphrasedCurrent = true;
+        rememberParaphrase(s, trimmed);
       }
     } else if (result.kind === "adequate" || result.kind === "question_after") {
       s.phase = "done";

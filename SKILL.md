@@ -322,6 +322,7 @@ Match depth to **file role** (styles stay in the walk — lighter bar, not skipp
 | **Shared gate / wiring** (HOC, shared query wrapper, central module) | what + why + roughly who consumes it / Empty vs Error (or equivalent) split. |
 | **Screen / route** | what the user sees + which signal drives refresh/retry if this PR touches that. |
 | **Styles / barrel** | Tokens vs magic numbers, shared layout with sibling state components, barrel as public entry — not property-by-property. |
+| **Test / spec locking a helper** | What this file guards and why (awkward E2E, regression). Do not re-quiz the helper’s full contract if they already explained it. |
 
 **Role in PR** and **Wiring** help them place the file — welcome in the paraphrase but not required verbatim. If Look closer named hotspots, **prefer** asking about them by name (and may point at the line range). On **behavior pivots**, naming the pivot (or the wrong alternative) is expected for a pass when Look closer called it out. On other files, hotspot names remain a plus, not a hard gate when the file-level explanation is solid. If a Map (in-file or sibling) was given, how the pieces connect is welcome in the same paraphrase, not a separate gate. Do not advance on “next” / “lgtm” alone.
 
@@ -363,10 +364,17 @@ surface differences → optional open question).
   the walkthrough.)
 
 “Good enough” means they could explain it to a teammate, not that they
-recited the card. Do not fail a solid what/why on a normal file only because
-Look closer names were skipped. Do fail (as thin) a pivot-file teach-back that
-never engages the wrong-alternative. Do not require them to cover Could have,
-Uh oh, or review-checklist items that were not in the card.
+recited the card. **Credit earlier files.** If they already explained a
+contract (boolean polarity, flag meaning, return shape) upstream, do not
+fail a later test/caller/wrapper for not repeating it — they need to say
+what *this* file does relative to that contract. Do not fail a solid
+what/why on a normal file only because Look closer names were skipped.
+Do fail (as thin) a pivot-file teach-back that never engages the
+wrong-alternative **and** they have not already explained that pivot.
+Stay messages: one missing high-level piece, not a checklist of internals
+(TTL, off-by-one, skip flags) unless that *is* this file’s pivot.
+Do not require them to cover Could have, Uh oh, or review-checklist items
+that were not in the card.
 
 ## Questions and inline notes (review Q&A)
 
@@ -432,6 +440,11 @@ confusion.
 - Do not silently shorten a large PR or drop teach-back to “get through it.”
 - Do not give a second full recap at the end before they summarise.
 - Do not make them recap a file they already explained after a side question.
+- Do not re-quiz a boolean, return polarity, or helper contract they already
+  paraphrased on an earlier file — tests and callers need this file’s job
+  relative to that contract, not a recitation.
+- Do not stay with a checklist of internals (TTL, off-by-one, skip flags)
+  when they already have the high-level what/why; one missing piece.
 - Do not advance without a teach-back (or an explicit skip).
 - Do not confuse this skill with an automated defect hunt.
 - Do not invent uh-ohs to look thorough.

@@ -483,6 +483,7 @@ export async function gradeTeachback(opts: {
   text: string;
   stage: "file" | "wrapup";
   card?: FileCard;
+  prior?: { path: string; text: string }[];
 }): Promise<TeachbackResult> {
   const holder: { value?: TeachbackResult } = {};
   const hotspot = opts.card?.lookCloser.map((h) => h.name).join(", ");
@@ -493,16 +494,24 @@ export async function gradeTeachback(opts: {
     .map((h) => `${h.name}: ${h.why}`)
     .join("; ");
   const siblingMap = opts.card?.map?.trim();
+  const prior =
+    opts.prior && opts.prior.length
+      ? opts.prior
+          .map((p) => `- ${p.path}: ${p.text}`)
+          .join("\n")
+      : "";
   const run = await opts.agent.send(
     [
       opts.stage === "file"
         ? [
             `Grade this teach-back for ${opts.card?.path}.`,
-            "Pass if they explained what the file does and why it changed, in their own words, well enough to tell a teammate.",
-            "Scale expectations to file role: styles/barrels need intent-level understanding (tokens, shared layout, public entry), not property-by-property recitation.",
+            "Pass if they explained what this file does and why it changed, in their own words, well enough to tell a teammate.",
+            "Credit the walk so far. If they already explained a contract (boolean polarity, flag meaning, return shape) on an earlier file, do not fail this file for not repeating it. Tests, callers, and wiring of that helper: pass when they say what this file locks in and why it exists relative to that contract.",
+            "Scale to file role: styles/barrels = intent, not every key. Tests = what they guard and why, not Redis/TTL/off-by-one internals unless this file's Look closer named that as a behavior pivot.",
             "Shared gates/screens: what + why (+ roughly who consumes / which signal) is enough.",
+            "Stay messages: one missing high-level piece. Do not dump a checklist of five omissions.",
             pivotHint
-              ? `Behavior pivot Look closer — ${pivotHint}. If their paraphrase never engages that semantic choice (or the wrong alternative), grade thin — do not pass a vague “loading flag” summary.`
+              ? `Behavior pivot Look closer on THIS file — ${pivotHint}. If their paraphrase never engages that semantic choice (or the wrong alternative), and they have not already explained it upstream, grade thin.`
               : "Do not fail them for skipping Look closer names when the overall explanation is solid.",
             hotspot && !pivotHint
               ? `Mentioning ${hotspot} is a plus, not a gate.`
@@ -516,12 +525,16 @@ export async function gradeTeachback(opts: {
         : [
             "Grade the final PR summary.",
             "Pass only if they cover: (1) user outcome after merge, (2) the shared gate/module by name and its contract, (3) how call sites diverge if they do.",
+            "Credit contracts they already paraphrased on earlier files — they need not recap internals.",
             "Product-only summaries that never name the glue module or any surface divergence are thin.",
             "An optional open question for the author is welcome, not required.",
           ].join(" "),
       "Call grade_teachback once. adequate = could explain to a teammate. thin = stay. question_before = asked before paraphrasing. question_after = paraphrased then asked.",
       opts.card
-        ? `Card what: ${opts.card.what}\nCard why: ${opts.card.why}${opts.card.roleInPr ? `\nRole in PR: ${opts.card.roleInPr}` : ""}${siblingMap ? `\nMap: ${siblingMap}` : ""}`
+        ? `Card what: ${opts.card.what}\nCard why: ${opts.card.why}${opts.card.roleInPr ? `\nRole in PR: ${opts.card.roleInPr}` : ""}${siblingMap ? `\nMap: ${opts.card.map}` : ""}`
+        : "",
+      prior
+        ? `They already explained these earlier files (credit; do not re-quiz):\n${prior}`
         : "",
       "Reviewer said:",
       opts.text,

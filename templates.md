@@ -135,7 +135,9 @@ When Look closer is none, keep the first teach-back paragraph. For **styles/barr
 
 ## Teach-back: inadequate
 
-Stay on the same file (or the final summary). One short correction, then re-prompt.
+Stay on the same file (or the final summary). One short correction — the
+highest-leverage missing piece, not a list of internals they already
+covered upstream — then re-prompt.
 
 ```markdown
 Close, but [the missing or wrong piece in one sentence].
