@@ -95,18 +95,6 @@ function OverviewBody({ overview }: { overview: Overview }) {
           <Prose text={overview.repoNote} />
         </>
       )}
-      {overview.coachNote && (
-        <>
-          <h2>Repo map</h2>
-          <Prose text={overview.coachNote} />
-        </>
-      )}
-      {overview.craftNote && (
-        <>
-          <h2>Craft</h2>
-          <Prose text={overview.craftNote} />
-        </>
-      )}
       <h2>Queue</h2>
       <ol className="queue">
         {overview.queue.map((path) => (

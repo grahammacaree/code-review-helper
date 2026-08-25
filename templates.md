@@ -131,7 +131,7 @@ Before we continue: in your own words, what does this file change do, and why wa
 
 If a **sibling Map** was shown, you may invite the divergence in the same paraphrase — still one gate, not a second quiz.
 
-When Look closer is none, keep the first teach-back paragraph. For **styles/barrel** files, the first paragraph is enough; do not demand property-by-property recitation.
+When Look closer is none, keep the first teach-back paragraph. For **styles/barrel** files, the first paragraph is enough; do not demand property-by-property recitation. For **tests** locking a helper, what they guard and why is enough if the helper contract was already paraphrased upstream.
 
 ## Teach-back: inadequate
 
@@ -227,14 +227,15 @@ Design forks: at most 1–2 high-value items, or omit the section.
 That’s the files. In your own words, cover:
 1. **User outcome** — what this changes for someone using the app after merge
 2. **Shared gate** — which module owns the shared contract (name it) and what that contract is
-3. **Surface differences** — where call sites diverge (if they do)
+3. **Surface differences** — where call sites diverge, **if they do**. If this PR is one shared surface with no opt-in split, naming that path is enough — do not invent a framework-vs-network story.
 4. **Open question** (optional) — one thing you’d still ask the author
 
 I won’t close out on “done” alone.
 ```
 
-A summary that only restates the product story with no shared gate and no
-real divergence is thin — correct once and stay on wrap-up.
+A summary that only restates the product story and never names the shared
+gate is thin — correct once and stay on wrap-up. Missing “how call sites
+diverge” is thin only when this PR actually has that split.
 
 ## Wrap-up: adequate
 

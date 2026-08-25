@@ -38,8 +38,6 @@ import {
 } from "./scaffold.js";
 import { formatRepoLens, loadRepoLens } from "./repoLens.js";
 import {
-  coachNoteForUi,
-  craftNoteForUi,
   loadCommentary,
   type CommentaryBundle,
 } from "./commentary.js";
@@ -574,11 +572,6 @@ async function runOverview(s: Session, mode: "all" | "core"): Promise<void> {
       commentary,
     }),
   );
-  s.overview = {
-    ...s.overview,
-    coachNote: coachNoteForUi(commentary),
-    craftNote: craftNoteForUi(commentary),
-  };
   s.queue = s.overview.queue;
   invalidateWiringIndex(s);
   s.phase = "overview";

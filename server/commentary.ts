@@ -60,27 +60,6 @@ export async function saveCommentary(opts: {
   await writeFile(repoPathFor(opts.key), clip(opts.repoMarkdown), "utf8");
 }
 
-/** Short block for the overview UI — not the full private files. */
-export function coachNoteForUi(bundle: CommentaryBundle): string | undefined {
-  const matters = extractSection(bundle.repoMarkdown, ["What matters"]);
-  const watch = extractSection(bundle.repoMarkdown, ["Watch next"]);
-  const bits = [matters, watch].filter(Boolean);
-  if (bits.length) return bits.join("\n\n").slice(0, 1600);
-  if (!bundle.repoMarkdown.trim()) return undefined;
-  return "You have a private map of this checkout from earlier walks.";
-}
-
-export function craftNoteForUi(bundle: CommentaryBundle): string | undefined {
-  const working = extractSection(bundle.userMarkdown, ["Working on"]);
-  const patterns = extractSection(bundle.userMarkdown, [
-    "Patterns worth keeping",
-    "Patterns",
-  ]);
-  const bits = [working, patterns].filter(Boolean);
-  if (!bits.length) return undefined;
-  return bits.join("\n\n").slice(0, 1600);
-}
-
 export function commentaryPromptBlock(
   bundle: CommentaryBundle | undefined,
 ): string {
@@ -114,6 +93,7 @@ export function emptyUserTemplate(): string {
 
 Private. Walkthrough app only. Kind, firm, specific. Never contempt.
 About how Graham reviews — not a map of any one repo.
+Patterns are portable habits. Merge; do not log walks, filenames, or vendor class names.
 
 ## Patterns worth keeping
 
@@ -141,7 +121,8 @@ export function emptyRepoTemplate(opts: {
   return `# ${who}
 
 Private map of this checkout from walks. Not part of the git repo.
-About the codebase — not a diary of teach-back.
+About the codebase — not a diary of teach-back or a PR changelog.
+Each walk should merge new facts into this map.
 
 ## Snapshot
 
@@ -149,13 +130,7 @@ About the codebase — not a diary of teach-back.
 
 ## What matters here
 
-Durable architecture and review seams. Merge new facts; drop what a later walk disproved.
-
-(none yet)
-
-## Walks
-
-Newest first. One short entry per PR: what it revealed about this repo, not how the walk went.
+Durable architecture and review seams. Merge what this walk taught; drop what a later walk disproved. Group by how the system works (opt-in vs global, where code runs, fail-open, what tests prove). Do not keep a per-PR log.
 
 (none yet)
 
@@ -165,27 +140,6 @@ When a future PR touches a related seam, look at these — not recitation prompt
 
 (none yet)
 `;
-}
-
-function extractSection(markdown: string, titles: string[]): string {
-  if (!markdown.trim()) return "";
-  const lines = markdown.split("\n");
-  const want = titles.map((t) => t.toLowerCase());
-  let start = -1;
-  for (let i = 0; i < lines.length; i += 1) {
-    const h = lines[i].match(/^#{1,3}\s+(.+)/);
-    if (h && want.some((t) => h[1].toLowerCase().includes(t))) {
-      start = i;
-      break;
-    }
-  }
-  if (start < 0) return "";
-  const out = [lines[start]];
-  for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^#{1,3}\s+/.test(lines[i])) break;
-    out.push(lines[i]);
-  }
-  return out.join("\n").trim();
 }
 
 function slug(raw: string): string {

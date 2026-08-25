@@ -48,8 +48,6 @@ export interface Overview {
   assetsNote?: string;
   noiseNote?: string;
   repoNote?: string;
-  coachNote?: string;
-  craftNote?: string;
 }
 
 export interface FileCard {
