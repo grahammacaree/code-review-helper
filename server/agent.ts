@@ -524,18 +524,18 @@ export async function gradeTeachback(opts: {
             .join(" ")
         : [
             "Grade the final PR summary.",
-            "Pass if they cover: (1) user outcome after merge, (2) the shared gate/module by name and its contract, (3) how call sites diverge if this PR has that split.",
-            "If the PR is one shared surface with no opt-in callers (e.g. one global stylesheet), naming that path plus the contract is enough — do not fail for a missing framework-vs-network story.",
-            "Credit contracts they already paraphrased on earlier files — they need not recap internals.",
-            "Product-only summaries that never name the glue module are thin.",
-            "An optional open question for the author is welcome, not required.",
+            "Pass if a teammate could retell the PR from this summary PLUS what they already said on files and earlier wrap-up tries. Do not require every wrap-up checklist item in this one paragraph.",
+            "Need a named shared gate/hook (or a clear pointer to one they already named in the walk) and a user outcome somewhere in the walk—not necessarily restated if the first wrap-up already had the tab/shell outcome.",
+            "Call-site split, onPress vs flat, empty vs footer errors: credit file paraphrases and earlier wrap-up attempts. Do not fail this try for omitting a beat they already articulated.",
+            "After a stay: if they filled that piece, pass. Do not invent a new missing beat they already covered. One high-level gap they never said, or pass.",
+            "Product-only with no glue named anywhere in the walk is thin. An optional open question is welcome, not required.",
           ].join(" "),
       "Call grade_teachback once. adequate = could explain to a teammate. thin = stay. question_before = asked before paraphrasing. question_after = paraphrased then asked.",
       opts.card
         ? `Card what: ${opts.card.what}\nCard why: ${opts.card.why}${opts.card.roleInPr ? `\nRole in PR: ${opts.card.roleInPr}` : ""}${siblingMap ? `\nMap: ${opts.card.map}` : ""}`
         : "",
       prior
-        ? `They already explained these earlier files (credit; do not re-quiz):\n${prior}`
+        ? `They already explained these earlier in the walk (credit; do not re-quiz). (wrap-up) lines are previous summary tries:\n${prior}`
         : "",
       "Reviewer said:",
       opts.text,
@@ -694,7 +694,7 @@ export async function updateWalkCommentary(opts: {
     [
       "Rewrite Graham's private walkthrough notes after this PR walk.",
       "These files live only in the walkthrough app. They are never written into the git repo under review.",
-      "Two files, two jobs. Do not mix them.",
+      "Two files, two jobs. Do not mix them. Do not rewrite general.md — that file is Graham’s hand-edited best-practice notes; it is not in this tool.",
       "user.md is about Graham as a reviewer (cross-repo craft). Address him. Be kind and specific. Be firm about gaps. Never contemptuous, sarcastic, or demeaning. Do not call him stupid, lazy, or hopeless. Do not pile on. Prefer 'this still slips' over 'you always miss this.' Not a repo diary — do not paste architecture, package paths, or PR seam maps here.",
       "user.md Patterns worth keeping: portable habits only. Merge into existing bullets. Do not add 'On the X walk…' items, PR titles, filenames, or vendor class names. Cap at ~8 bullets. Example shape: 'Looks up what vendor prefixes actually do before treating selectors as safe' — not a OneTrust anecdote.",
       "user.md Working on: same abstraction — a habit to tighten, not a recap of this walk. If this walk showed the gap, keep it and set (quiet: 0). If it did not show, increment (quiet: N). After quiet: 2, move the bullet to Do not hammer. If it is already in Do not hammer and still quiet, drop it. If a cooled gap shows again, put it back in Working on at (quiet: 0). Never grow Working on from vibes. Strengths (Patterns worth keeping) may stay without fresh proof.",

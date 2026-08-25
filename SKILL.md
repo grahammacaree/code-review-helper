@@ -409,9 +409,11 @@ own words (see [templates.md](templates.md)):
 3. **Surface differences** — where call sites diverge, **if they do**. One shared surface (global stylesheet, no opt-in callers) does not need a fake split.
 4. **Open question** (optional) — one thing they would still ask the author.
 
-A product-only summary that never names the shared gate is **thin** — one
-short correction, stay on wrap-up. Do not fail wrap-up for missing
-divergence when this PR has none.
+A product-only summary that never names the shared gate anywhere in the
+walk is **thin**. Credit earlier files and earlier wrap-up tries — do not
+fail this paragraph for a beat they already articulated, and do not move
+the goalposts after they fill a stay. Missing divergence is thin only
+when this PR has that split **and** they never said it.
 
 If the summary is thin or wrong: same gate as a file — one short
 correction, stay here. When it’s good enough: one-line confirm, offer to
@@ -458,8 +460,9 @@ confusion.
 - Do not leave Look closer as “none” on a one-line behavior pivot whose
   whole point is the wrong alternative.
 - Do not accept a wrap-up that only restates the product story with no
-  shared gate (treat as thin). Do not fail wrap-up for missing call-site
-  divergence when this PR has none.
+  shared gate anywhere in the walk (treat as thin). Do not fail wrap-up
+  for a beat they already said on a file or an earlier summary try. Do
+  not invent a new stay after they fill the last one.
 - Do not dump every Could have into wrap-up Design forks — at most 1–2.
 - Do not duplicate Role in PR and What/Why with the same sentences.
 - Do not paste every import line in Wiring — only paths/symbols that matter

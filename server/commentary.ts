@@ -10,6 +10,7 @@ export interface CommentaryBundle {
   repoPath: string;
   userMarkdown: string;
   repoMarkdown: string;
+  generalMarkdown: string;
 }
 
 const MAX_FILE_CHARS = 12_000;
@@ -20,6 +21,10 @@ function commentaryDir(): string {
 
 function userPath(): string {
   return join(commentaryDir(), "user.md");
+}
+
+function generalPath(): string {
+  return join(commentaryDir(), "general.md");
 }
 
 function repoPathFor(key: string): string {
@@ -43,11 +48,12 @@ export async function loadCommentary(
   repoPath: string,
 ): Promise<CommentaryBundle> {
   const { key, origin } = await commentaryKey(repoPath);
-  const [userMarkdown, repoMarkdown] = await Promise.all([
+  const [userMarkdown, repoMarkdown, generalMarkdown] = await Promise.all([
     readOptional(userPath()),
     readOptional(repoPathFor(key)),
+    readOptional(generalPath()),
   ]);
-  return { key, origin, repoPath, userMarkdown, repoMarkdown };
+  return { key, origin, repoPath, userMarkdown, repoMarkdown, generalMarkdown };
 }
 
 export async function saveCommentary(opts: {
@@ -63,12 +69,23 @@ export async function saveCommentary(opts: {
 export function commentaryPromptBlock(
   bundle: CommentaryBundle | undefined,
 ): string {
-  if (!bundle || (!bundle.userMarkdown.trim() && !bundle.repoMarkdown.trim())) {
+  if (
+    !bundle ||
+    (!bundle.userMarkdown.trim() &&
+      !bundle.repoMarkdown.trim() &&
+      !bundle.generalMarkdown.trim())
+  ) {
     return "";
   }
   return [
     "Private notes live in the walkthrough app (`data/commentary/`), never in the git checkout under review.",
-    "Two files, two jobs: user.md is about Graham’s review craft; repos/*.md is a map of this checkout. Do not mix them.",
+    "Three jobs. Do not mix them: general.md is best-practice commentary Graham wrote (hand-edited; do not rewrite). user.md is Graham’s review craft. repos/*.md is a map of this checkout.",
+    bundle.generalMarkdown.trim()
+      ? [
+          "Best practices: tilt Could have / Uh oh when this file actually fights them (e.g. unit tests that lock UI presentation instead of behavior). Do not teach-back these notes. Do not invent extra card sections.",
+          `Best practices:\n${clip(bundle.generalMarkdown, 3500)}`,
+        ].join("\n\n")
+      : "",
     bundle.repoMarkdown.trim()
       ? [
           "Checkout map: tilt uh-ohs / Look closer toward **What matters here** and **Watch next** when this file hits those seams.",

@@ -744,7 +744,9 @@ export async function askAboutFile(
 function priorParaphrases(
   s: Session,
 ): { path: string; text: string }[] {
-  return s.paraphrases.slice(-8).map((p) => ({
+  const files = s.paraphrases.filter((p) => p.path !== "(wrap-up)").slice(-8);
+  const wrapups = s.paraphrases.filter((p) => p.path === "(wrap-up)").slice(-4);
+  return [...files, ...wrapups].map((p) => ({
     path: p.path,
     text: p.text.slice(0, 500),
   }));
@@ -754,6 +756,10 @@ function rememberParaphrase(s: Session, text: string): void {
   if (!s.card) return;
   if (s.paraphrases.some((p) => p.path === s.card!.path)) return;
   s.paraphrases.push({ path: s.card.path, text });
+}
+
+function rememberWrapupAttempt(s: Session, text: string): void {
+  s.paraphrases.push({ path: "(wrap-up)", text });
 }
 
 export async function submitTeachback(
@@ -833,6 +839,8 @@ export async function submitTeachback(
         kind: "status",
         text: `That’s the walk. Restore ${restoreTarget(s)} if the tree is clean.`,
       });
+    } else if (result.kind === "thin") {
+      rememberWrapupAttempt(s, trimmed);
     }
   });
 }

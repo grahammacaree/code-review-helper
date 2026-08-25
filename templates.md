@@ -234,8 +234,9 @@ I won’t close out on “done” alone.
 ```
 
 A summary that only restates the product story and never names the shared
-gate is thin — correct once and stay on wrap-up. Missing “how call sites
-diverge” is thin only when this PR actually has that split.
+gate *anywhere in the walk* is thin — one short correction, stay. Credit
+file paraphrases and earlier wrap-up tries: do not fail a later try for a
+beat they already said, and do not pick a new beat after they fill a stay.
 
 ## Wrap-up: adequate
 
