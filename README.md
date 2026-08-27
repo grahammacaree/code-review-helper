@@ -9,6 +9,8 @@ This repo has two surfaces that share the same rough workflow:
 
 The local app is the primary tool. The skill is a lighter, portable copy of the same walk — easier to grab, without the UI, private notes, or host-owned chase insert. This project was built and tested in [Cursor](https://cursor.com). The skill should work in any coding agent with git access. The app drives a **local Cursor agent** via `@cursor/sdk` (usage bills to your Cursor API key).
 
+<img width="1512" height="864" alt="image" src="https://github.com/user-attachments/assets/2fa1cedc-f46b-4e60-85a1-63d5bcfff9bb" />
+
 This project is intended mainly as personal software and as such may incorporate some of my own ideosyncracies — if you try it out and it doesn’t work for you, it will probably require some tweaks to accommodate your personal workflow. 
 
 ## Motivation
