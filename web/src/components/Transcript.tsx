@@ -170,6 +170,12 @@ function FileBody({
           <Prose text={card.roleInPr} />
         </>
       )}
+      {card.concept && (
+        <>
+          <h3>Concept</h3>
+          <Prose text={card.concept} />
+        </>
+      )}
       {card.wiringNote && (
         <>
           <h3>Wiring</h3>

@@ -4,12 +4,16 @@ This project sets up a file-by-file PR walkthrough with a teach-back gate, ensur
 
 This repo has two surfaces that share the same rough workflow:
 
-- A **local app** (`npm run dev`) that expands on the skill: the host owns the gates (dirty tree, large PR, one file, teach-back) and adds a dedicated UI (map, file/diff, inline notes, function probe, opt-in chase). The agent still writes the cards.
+- A **local app** (`npm run dev`) that expands on the skill: the host owns the gates (dirty tree, large PR, one file, teach-back) and adds a dedicated UI (map, file/diff, inline notes, function sandbox, opt-in chase). The agent still writes the cards.
 - A **Cursor skill** (`SKILL.md`) you can run in the IDE (or paste into another coding agent).
 
 The local app is the primary tool. The skill is a lighter, portable copy of the same walk — easier to grab, without the UI, private notes, or host-owned chase insert. This project was built and tested in [Cursor](https://cursor.com). The skill should work in any coding agent with git access. The app drives a **local Cursor agent** via `@cursor/sdk` (usage bills to your Cursor API key).
 
-<img width="1512" height="864" alt="image" src="https://github.com/user-attachments/assets/2fa1cedc-f46b-4e60-85a1-63d5bcfff9bb" />
+![A file card mid-walk: what / why / role / concept / wiring on the left, the local file at the changed lines on the right, with an inline comment thread anchored to the hunk.](docs/walkthrough.png)
+
+![The function sandbox: the function's source on the left, editable, with inferred arguments and a result pane on the right.](docs/function-sandbox.png)
+
+Screenshots are taken from design mode, so the repo under review is invented rather than anyone's real code.
 
 This project is intended mainly as personal software and as such may incorporate some of my own ideosyncracies — if you try it out and it doesn’t work for you, it will probably require some tweaks to accommodate your personal workflow. 
 
@@ -52,6 +56,10 @@ So the walkthrough:
 Review texture (contracts, risk, size, counterfactuals) lives in those existing buckets when the file actually has it. The overview / large-PR gate is where size and split-worthiness show up. Tests, ops, and rollout belong in a later defect pass unless they *are* the reason something is in Look closer or Uh oh. In the **skill**, optional GitHub **Viewed** flags can quiet the PR file tree; they are not a substitute for checkout. The app does not set Viewed flags.
 
 Uh ohs are not a bot review. They are “look at this if you are going to thumbs-up.”
+
+**It teaches the systems, not just the diff.** The walk detects which architectural systems this checkout actually runs on — shared cache tier, CDN/surrogate ownership, server render cache, client query keys, feature flags, shared-package contracts, device storage, native permissions, job idempotency, migrations, error-reporting ownership — and when a hunk lands on one of those seams the card adds a short **Concept** beat: what the strategy is *here*, what it buys, and how it usually breaks. That is the context a staff engineer already carries; reviewing a Duet PR should leave you knowing how Duet caches, and a mobile PR should leave you knowing what happens when the OS says no. It is teaching, so it is never a teach-back gate and never appears on files that only brush the system.
+
+**And the teaching adapts to you.** Each system is tracked against your profile — how many walks have taught it, and whether you engaged it in your own words rather than just reading it. The first time a system comes up the card scaffolds from scratch and glosses the vocabulary; once you have it, the card skips the primer and adds a dimension you have not been shown; once you are fluent it goes straight to the tradeoff this repo chose and what it costs. A system you have not seen in months steps back down a level, so stale knowledge gets re-grounded instead of assumed. The ledger lives in `data/commentary/concepts.json` (private, gitignored, alongside your craft notes), and the walk never mentions it — it changes the pitch, not the conversation.
 
 ## Requirements
 
@@ -114,6 +122,25 @@ Wait until the terminal shows the walkthrough API on port 8787. Vite can proxy `
 - UI: [http://127.0.0.1:5173](http://127.0.0.1:5173)
 - API: [http://127.0.0.1:8787](http://127.0.0.1:8787)
 
+### Design mode
+
+To look at the UI itself — spacing, density, wrapping, the states you only hit once per walk — you do not need a PR, an agent, or an API key:
+
+```bash
+npm run design          # opens http://127.0.0.1:5173/?design (sets VITE_DESIGN=1)
+npm run design:check    # headless: renders every state, fails if one breaks
+```
+
+Design mode renders the **real** walk surface (`WalkView`, the same component the app mounts) against fixtures, with the actions inert — so the design you review is the design you get, not a mock that drifts.
+
+The fixture repo is **invented**: `northwind/atlas`, a multi-network publishing monorepo whose networks share `packages/atlas-framework`, with a third-party reader-profile service called Starling. It is shaped like a real review (shared package plus two call sites, a fail-open bugfix, its tests, an asset) so every pane has something honest to render — and because none of it comes from anyone's codebase, **screenshots from design mode are safe to publish**. Screenshot from here rather than from a live walk.
+
+The app fills the window exactly as it normally does; the state picker is a floating **+** in the bottom-right corner that opens a dropdown, so it never takes layout space from what you are reviewing. `[` and `]` step through states without opening it. States: empty, missing key, dirty tree, large PR, overview, each of the four file panes, a concept beat on a shared-package change, a thin teach-back, inline comment threads with a probe result, the function sandbox, a chase card, working, error, wrap-up, done. The sandbox appears twice: once on its editor and once on the About tab.
+
+Design mode is on when either the `?design` query or `VITE_DESIGN` is present, so losing the query on a reload cannot silently boot the real app against a server you have not started.
+
+Fixtures live in `web/src/design/fixtures.ts`; add a scenario there when you add a state. Each carries a note on what to look at, which `npm run design:check` prints (rather than the UI, which stays uncluttered).
+
 In the form: path to the **other** repo (the PR’s clone), plus a PR URL or number. The app checks out the PR tip there (clean tree first). Explain files in the box; **Ask** vs teach-back is a mode switch. **Skip remaining tests** drops leftover test/spec files when the rest of the queue is bookkeeping. **New walkthrough** starts a new session.
 
 If the API key is missing, `/api/auth` reports it and cards will not generate. If checkout fails, `gh` is usually not installed or not logged in. Do not expose 5173/8787 off localhost (see Data and security).
@@ -125,23 +152,24 @@ After a walk, the app rewrites **private notes** under `data/commentary/` in *th
 - `user.md` — portable craft (how you review). Habits, not a walk log.
 - `repos/<origin>.md` — a living map of that checkout (how the system works, seams to look at). Each walk merges in; it is not a PR changelog.
 - `general.md` — best-practice commentary you write yourself. Walks do not overwrite it. Edit the file under `data/commentary/general.md`.
+- `concepts.json` — per-system exposure ledger (taught count, engaged count, last seen, which checkouts). Sets the depth of the **Concept** beat. Counts, not prose; safe to delete if you want to start teaching from scratch.
 
 Those files feed later **cards** (uh-ohs / Look closer). They are **not** shown on the opening overview. The **Repo** overview block is stack/docs Watch for (mobile vs website vs backend, `AGENTS.md` / contributing bullets), not private notes and not a detector of whether you already own the system.
 
-The function probe looks for Jest/spec samples and typed fixtures (`const foo: Type = { … }`), not only inline literals. Each file card includes **Role in PR** (agent) and **Wiring** (parsed imports/exports among queued and covered files — “no importers in walk scope” means none *in this walk*, not unused in the product); the right column exposes the same as **Role** and **Wiring** tabs beside **File** and **Diff**. If an unchanged file still imports a changed export, Wiring (and a chip) can **Chase** it: up to three thin cards inserted after the current file (finish this file first), no chase-on-chase, skip / done looking instead of teach-back. Checkout is what lets you click through to those callers. At wrap-up (and when done), the last file stays open and you can **click files in the map** to reopen Diff / File / Role / Wiring while writing the summary. **Copy review notes** puts lingering uh-ohs, design forks, and your inline questions/comments on the clipboard as Markdown for pasting into a GitHub review.
+Clicking the ▸ beside a function header opens the **function sandbox**, a near-fullscreen modal where both the function and its arguments are editable: Run (or ⌘/Ctrl+Enter) executes what is on screen. An edited function runs from a scratch copy of the whole file written beside the original — so its imports still resolve — and that copy is always deleted afterwards; your working tree is never modified. The argument box is filled by working down a ladder, and the note above it says which rung it landed on: a Jest/spec call, a typed fixture (`const foo: Type = { … }`) or fixture builder, a real call site in ordinary source, and finally the parameter types themselves — interfaces, type aliases, enums and inline object types are followed through relative imports and turned into objects with their required fields filled. Only when a type says nothing do you get a bare placeholder. The modal's **About** tab explains the function rather than the diff: what it does, why it exists and who calls it, the repo system it participates in (taught at the depth your earlier walks earned), and one caution about editing it — over a list of facts parsed from the checkout (signature, the comment above it, whether it is exported, the imports its body uses, every caller with test and changed-in-this-PR marked, and whether the PR touches its lines). It costs an agent round trip, so nothing is fetched until you open the tab, and the answer is cached per function; **Ask again** puts the question afresh rather than replaying the cache. Each file card includes **Role in PR** (agent) and **Wiring** (parsed imports/exports among queued and covered files — “no importers in walk scope” means none *in this walk*, not unused in the product); the right column exposes the same as **Role** and **Wiring** tabs beside **File** and **Diff**. If an unchanged file still imports a changed export, Wiring (and a chip) can **Chase** it: up to three thin cards inserted after the current file (finish this file first), no chase-on-chase, skip / done looking instead of teach-back. Checkout is what lets you click through to those callers. At wrap-up (and when done), the last file stays open and you can **click files in the map** to reopen Diff / File / Role / Wiring while writing the summary. **Copy review notes** puts lingering uh-ohs, design forks, and your inline questions/comments on the clipboard as Markdown for pasting into a GitHub review.
 
 
 ## Data and security
 
 This is personal local software, not a hosted product. Treat it that way.
 
-**On this machine.** The Cursor API key lives in `.env` (gitignored). Walk state lives under `data/` in *this* project (also gitignored): `data/sessions/` holds card text, teach-back, inline notes, and PR metadata as JSON; `data/commentary/` holds craft notes (`user.md`), a living map of each checkout (`repos/<origin>.md`), and hand-edited best-practice notes (`general.md`). Those commentary files are for the agent, not the overview UI. Full file blobs are not written to those session files — the host re-reads the worktree when you resume. The browser keeps a session id and recent clone paths in `localStorage`. None of that is encrypted at rest.
+**On this machine.** The Cursor API key lives in `.env` (gitignored). Walk state lives under `data/` in *this* project (also gitignored): `data/sessions/` holds card text, teach-back, inline notes, and PR metadata as JSON; `data/commentary/` holds craft notes (`user.md`), a living map of each checkout (`repos/<origin>.md`), hand-edited best-practice notes (`general.md`), and a per-system exposure ledger (`concepts.json`). Those commentary files are for the agent, not the overview UI. Full file blobs are not written to those session files — the host re-reads the worktree when you resume. The browser keeps a session id and recent clone paths in `localStorage`. None of that is encrypted at rest.
 
 **Not in the repo under review.** Checkout switches that clone to the PR tip (and can stash if you confirm). The app does not commit, push, or write notes into that tree. Private commentary is the reason: a public repo should not get a file that maps that checkout or says what you still miss.
 
 **Off this machine.** Card generation, teach-back grading, Q&A, and commentary rewrites go through the **Cursor API**. That includes diffs, excerpts, PR title/body, and slices of your private notes when they exist. Usage bills to your key. The **skill** is whatever agent is running in the IDE: it sees the workspace you opened and talks to that agent’s backend; it does not use this app’s `data/` folder.
 
-**The local HTTP API.** UI and API bind to `127.0.0.1`. There is no login. Anyone who can reach those ports on your machine can drive a session, including the function probe (which **runs code from the reviewed tree** in a temp harness). Do not expose 5173/8787 to the network.
+**The local HTTP API.** UI and API bind to `127.0.0.1`. There is no login. Anyone who can reach those ports on your machine can drive a session, including the function sandbox (which **runs code from the reviewed tree**, and any edit you type, in a scratch harness). Do not expose 5173/8787 to the network.
 
 **GitHub.** The app does not post review comments. The skill stays read-only unless you explicitly ask it to comment. Optional Viewed flags in the skill are navigation only.
 
@@ -161,13 +189,23 @@ Delete `data/` and `.env` if you want a clean slate. `New walkthrough` starts a 
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `SKILL.md`                          | Agent instructions (Cursor skill format; usable elsewhere)                                                           |
 | `templates.md`                      | Output shapes (overview, file card, teach-back, wrap-up)                                                             |
-| `server/`                           | Walkthrough host (checkout, gates, agent, function probe)                                                            |
+| `server/`                           | Walkthrough host (checkout, gates, agent, function sandbox)                                                            |
+| `server/probe.ts`                   | Finds the function under the cursor; runs it — or your sandbox edit — in a scratch harness                            |
+| `server/samples.ts`                 | The argument ladder: test calls, typed fixtures, fixture builders, real call sites                                    |
+| `server/shapes.ts`                  | Last rung of that ladder: builds a value from the parameter's own type, following local imports                       |
 | `server/wiring.ts`                  | Import/export graph among **walk** files; `findOutsideImporters` for opt-in chase                                    |
 | `server/repoLens.ts`                | Checkout kind + doc/stack Watch for (overview + uh-oh bias)                                                          |
+| `server/concepts.ts`                | Which architectural systems this checkout runs on + the staff-level framing taught when a hunk hits that seam         |
+| `server/conceptMemory.ts`           | Per-system exposure ledger; picks scaffold / build / deepen for the Concept beat                                      |
 | `server/commentary.ts`              | Private notes: craft, checkout map, hand-edited `general.md`; agent-only, not shown on overview                       |
 | `web/`                              | Local UI                                                                                                             |
 | `web/src/components/RolePane.tsx`   | **Role** tab — PR motivation + file role                                                                             |
 | `web/src/components/WiringPane.tsx` | **Wiring** tab — walk-scope graph plus Chase on outside callers                                                      |
+| `web/src/components/Sandbox.tsx`    | Function sandbox modal: editable source and arguments, plus the **About** brief                                       |
+| `web/src/components/NoteThread.tsx` | Inline review threads anchored in the code (comments, Look closer, uh ohs)                                           |
+| `web/src/components/Octicon.tsx`    | Inlined Octicon (MIT) 16px paths used by the tab bar                                                                 |
+| `web/src/components/WalkView.tsx`   | The two-column walk surface; owns pane state only, so app and design mode cannot drift                                |
+| `web/src/design/`                   | Design mode: fixture states (`fixtures.ts`), the switcher (`DesignMode.tsx`), headless check (`smoke.tsx`)            |
 
 
 In Cursor the skill id is `pr-file-walkthrough` so existing triggers keep working. This repo is named `code-review-helper`.
@@ -175,3 +213,5 @@ In Cursor the skill id is `pr-file-walkthrough` so existing triggers keep workin
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+The tab bar icons are [Octicons](https://github.com/primer/octicons) (© GitHub, MIT), inlined as path data in `web/src/components/Octicon.tsx`.

@@ -266,6 +266,7 @@ checkout or for opening the local file.
 | **What** | Concrete change in this file (behavior, API, structure). Not a line dump. |
 | **Why** | Why this file had to change for the PR’s goal. |
 | **Role in PR** | One short paragraph: this file’s job in the **whole PR story** — stated motivation (title/body) **and** implicit motivation (what the overview’s “how it connects” implies this file must do). Not a repeat of What/Why. |
+| **Concept** | Optional, 2–4 sentences, **only when this hunk sits on a named architectural system in this checkout** (caching tier and what invalidates it, query-key boundary, CDN/surrogate ownership, shared-package contract, flag evaluation, offline/device schema, native permission denial, job idempotency, migration ordering, server/client boundary, error-reporting ownership). Teach it the way a staff engineer would brief a teammate: what the strategy is *here*, what it buys, how it usually breaks. Ground it in this diff, not a textbook. Omit when the hunk only brushes the system (imports, formatting, expected-string churn) or when it would restate Role in PR. **Never a teach-back gate.** |
 | **Wiring** | Import/export graph **within this PR’s change set** (the default graph): what this file pulls in (symbols + from which changed paths or key packages) and what it exports to which other changed files. Read `import`/`export` lines; resolve relative paths against the queued/covered list. External packages only when they are the point (new dependency, auth client, etc.). For non-code paths or when nothing parses, say **none** or one line. **“No importers in walk scope” means none in this walk, not unused in the product.** If a modified export looks like a contract change (signature, return/error shape, flag meaning) and callers may live outside the queue, say so and offer a **chase** — do not silently skip blast radius. |
 | **Links** | Queue context: files already covered and upcoming in the walk — complements Wiring (narrative order vs import graph). |
 | **Look closer** | 0–3 **named** functions/methods (or other hotspots) that are complex or novel, and are central to understanding this change. Each entry: **name + line range + why** (new protocol, dense control flow, non-obvious invariant, first of its kind here). On large files, line ranges are **required** — a bare name is not enough to find the spot. If none, say “none”. Not thin wrappers, re-exports, or routine CRUD. **Behavior pivots:** when the hunk is tiny but the whole point is a semantic choice (e.g. `isRefetching` vs `isFetching`, manual refresh flag vs query `isRefetching`), prefer a Look closer entry on that symbol — even a one-liner — with why the wrong alternative fails. Do not leave Look closer as “none” on those files. |
@@ -278,6 +279,31 @@ checkout or for opening the local file.
 2. **Sibling Map** — when this file is one of two or more call sites that solve the **same** PR UX differently (e.g. home binds refresh to `isRefetching`, article uses local manual refresh to avoid mount flash): 2–4 lines naming the sibling path(s) and the divergence. Put this on the later sibling (or both if needed). Do not invent architecture diagrams for simple files.
 
 **Map** is connection narrative (in-file control flow or cross-surface strategy). **Wiring** is import/export graph — use both when useful, not as duplicates of the same sentence. Styles/barrel files: prefer Role/Wiring (“presentation contract for EmptyState used by offline/not-found in `withQueryStates`”) over inventing an in-file Map of layout rules.
+
+**Concept** is teaching, not review: it explains the system the file sits
+on so they leave the walk knowing how this repo caches, gates, persists,
+or reports — the context a senior teammate already has. It is not a risk
+(that is Uh oh), not a fork (Could have), and never something they must
+recite. One system per file at most; skip it rather than repeat yourself.
+
+**Concept depth is per-system and adapts.** The app tracks, privately in
+`data/commentary/concepts.json`, how many walks have taught each system and
+whether Graham engaged it in his own words (paraphrase or question), then tags
+the card prompt `scaffold`, `build`, or `deepen`:
+
+- **scaffold** — never taught in a walk. Start from the ground: name the
+  system, say what it does and why this repo has it, gloss the jargon, give one
+  concrete consequence in this diff. No sharp-edge trivia.
+- **build** — taught before. Skip the definition, connect to what he already
+  knows, add exactly one new dimension (a second failure mode, the
+  invalidation side, where the boundary really sits).
+- **deepen** — well covered and engaged. Go to what a staff engineer would
+  argue about: the tradeoff this repo chose and its cost, the miss that is easy
+  to make, how this instance differs from the textbook. No primer.
+
+A system unseen for ~4 months steps down one level, so stale knowledge gets
+re-grounded instead of assumed. Never surface the tag, the counts, or the fact
+that exposure is tracked — it changes the pitch, not the conversation.
 
 Look closer, Could have, and Uh oh are different buckets. The same
 function may appear in Look closer and Uh oh; Could have is about
@@ -380,8 +406,10 @@ Do fail (as thin) a pivot-file teach-back that never engages the
 wrong-alternative **and** they have not already explained that pivot.
 Stay messages: one missing high-level piece, not a checklist of internals
 (TTL, off-by-one, skip flags) unless that *is* this file’s pivot.
-Do not require them to cover Could have, Uh oh, or review-checklist items
-that were not in the card.
+Do not require them to cover Could have, Uh oh, Concept, or
+review-checklist items that were not in the card. If they engage the
+Concept beat, credit it and build on it in one sentence — do not turn it
+into a quiz on TTLs, cache keys, or migration order.
 
 ## Questions and inline notes (review Q&A)
 
@@ -462,6 +490,10 @@ confusion.
 - Do not invent uh-ohs to look thorough.
 - Do not invent Could have alternatives on obvious or thin files.
 - Do not treat Look closer as Uh oh (or flag every new function).
+- Do not put a Concept beat on every file, teach a system this checkout
+  does not use, or restate the generic definition of caching / flags /
+  migrations instead of how *this* repo does it.
+- Do not gate, quiz, or stay on Concept.
 - Do not give Look closer entries without line ranges on large files.
 - Do not invent a Map on thin or obvious files.
 - Do not omit a sibling Map when two screens in this PR solve the same UX

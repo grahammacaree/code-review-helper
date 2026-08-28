@@ -39,82 +39,10 @@ export function RepoBar({
   const repoName = repoPath.replace(/\/$/, "").split("/").pop() || repoPath;
   const prLabel = session?.prRef ? `#${session.prRef}` : pr;
 
-  return (
-    <header className={`repo-bar${compact ? " compact" : ""}`}>
-      {compact && !expanded ? (
-        <button
-          type="button"
-          className="repo-summary"
-          aria-expanded="false"
-          aria-label={`Show repository form. ${repoName}${prLabel ? ` ${prLabel}` : ""}`}
-          onClick={() => setExpanded(true)}
-        >
-          <span className="repo-title">PR walkthrough</span>
-          <span className="muted">
-            {repoName}
-            {prLabel ? ` · ${prLabel}` : ""}
-          </span>
-        </button>
-      ) : (
-        <>
-          <div className="repo-bar-top">
-            <h1>PR walkthrough</h1>
-            {compact && (
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => setExpanded(false)}
-              >
-                Hide
-              </button>
-            )}
-          </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              onCheckout();
-            }}
-          >
-            <label htmlFor="repo">Local repository</label>
-            <div className="path-field">
-              <span className="path-prefix" aria-hidden="true">
-                ~/
-              </span>
-              <input
-                id="repo"
-                name="repo"
-                list="recent-repos"
-                autoComplete="off"
-                placeholder="apps/duet"
-                value={repoPath}
-                onChange={(e) => onRepoPath(displayRepo(e.target.value))}
-              />
-            </div>
-            <datalist id="recent-repos">
-              {recentRepos.map((path) => (
-                <option key={path} value={path} />
-              ))}
-            </datalist>
-            <label htmlFor="pr">PR URL or number</label>
-            <input
-              id="pr"
-              name="pr"
-              autoComplete="off"
-              placeholder="https://github.com/org/repo/pull/123"
-              value={pr}
-              onChange={(e) => onPr(e.target.value)}
-            />
-            <button
-              type="submit"
-              disabled={
-                working || !auth?.hasKey || !repoPath.trim() || !pr.trim()
-              }
-            >
-              Check out and map
-            </button>
-          </form>
-        </>
-      )}
+  // Setup, failure, and progress all sit beside the submit button rather than
+  // under it, so appearing does not move the form.
+  const statuses = (
+    <>
       {auth && !auth.hasKey && (
         <p className="status error" role="status">
           No <code>CURSOR_API_KEY</code>. Copy <code>.env.example</code> to{" "}
@@ -138,6 +66,94 @@ export function RepoBar({
           <span className="spinner" aria-hidden="true" />
           {workLabel || session?.workingOn || "Working…"}
         </p>
+      )}
+    </>
+  );
+
+  return (
+    <header className={`repo-bar${compact ? " compact" : ""}`}>
+      {compact && !expanded ? (
+        <button
+          type="button"
+          className="repo-summary head-row"
+          aria-expanded="false"
+          aria-label={`Show repository form. ${repoName}${prLabel ? ` ${prLabel}` : ""}`}
+          onClick={() => setExpanded(true)}
+        >
+          <span>PR walkthrough</span>
+          <span className="head-sub">
+            {repoName}
+            {prLabel ? ` · ${prLabel}` : ""}
+          </span>
+        </button>
+      ) : (
+        <>
+          <div className="head-row">
+            <h1>PR walkthrough</h1>
+            {/* Field label sits on the title's row rather than above the input. */}
+            <label className="head-sub" htmlFor="repo">
+              Local repository
+            </label>
+            {compact && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setExpanded(false)}
+              >
+                Hide
+              </button>
+            )}
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              onCheckout();
+            }}
+          >
+            <div className="path-field">
+              <span className="path-prefix" aria-hidden="true">
+                ~/
+              </span>
+              <input
+                id="repo"
+                name="repo"
+                list="recent-repos"
+                autoComplete="off"
+                placeholder="~/code/your-repo"
+                value={repoPath}
+                onChange={(e) => onRepoPath(displayRepo(e.target.value))}
+              />
+            </div>
+            <datalist id="recent-repos">
+              {recentRepos.map((path) => (
+                <option key={path} value={path} />
+              ))}
+            </datalist>
+            <label htmlFor="pr">PR URL or number</label>
+            <input
+              id="pr"
+              name="pr"
+              autoComplete="off"
+              placeholder="https://github.com/org/repo/pull/123"
+              value={pr}
+              onChange={(e) => onPr(e.target.value)}
+            />
+            <div className="repo-actions">
+              <button
+                type="submit"
+                disabled={
+                  working || !auth?.hasKey || !repoPath.trim() || !pr.trim()
+                }
+              >
+                Check out and map
+              </button>
+              <div className="repo-status">{statuses}</div>
+            </div>
+          </form>
+        </>
+      )}
+      {compact && !expanded && (
+        <div className="repo-status">{statuses}</div>
       )}
     </header>
   );

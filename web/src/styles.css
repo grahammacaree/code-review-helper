@@ -24,12 +24,20 @@
   --mark-col: 32px;
   --user-bubble: #ddf4ff;
   --text: 13px;
+  --title: 15px;
   --label: 12px;
   --mono: 12px;
   --heading: 13px;
-  --pad: 0.65rem 1rem;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
+  --pad-y: 0.65rem;
+  --pad: var(--pad-y) 1rem;
+  /* Height of a control in the command bar, and the shared floor for the two
+     bottom bars (command box, file header) derived from it: one row of
+     controls plus padding. Chips appearing must not change the seam. */
+  --ctl-h: 2rem;
+  --bar-h: calc(var(--ctl-h) + 2 * var(--pad-y) + 1px);
+  --ui-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
     Helvetica, Arial, sans-serif;
+  font-family: var(--ui-font);
 }
 
 * {
@@ -112,13 +120,11 @@ a {
   background: var(--bg-2);
 }
 
-.repo-bar h1,
-.repo-title,
-.map-blurb h2,
+/* Main heads (`.head-row > :first-child`) set their own size; these are the
+   sub-panel headings that stay at body size. */
 .file-inspect-head h2,
 .composer h3,
-.probe-panel h3,
-.notes h3,
+.sandbox-pane-head h3,
 .bubble h2,
 .bubble h3 {
   font-size: var(--heading);
@@ -126,31 +132,52 @@ a {
   line-height: 1.3;
 }
 
-.repo-bar h1 {
-  margin: 0 0 0.45rem;
+/* Main heads, standalone or paired with a sub. */
+.main-head,
+.head-row > :first-child {
+  font-size: var(--title);
+  font-weight: 600;
+  line-height: 1.25;
 }
 
-.repo-bar-top {
+.main-head {
+  margin: 0 0 0.35rem;
+}
+
+/* A main head and its one-line sub on a single baseline: title left, sub
+   pushed to the right edge. The sub is a label or metadata — status and
+   guidance belong in the body text below. */
+.head-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
   gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
 }
 
-.repo-bar-top h1 {
+.head-row > :first-child {
   margin: 0;
 }
 
+.head-row > .head-sub {
+  margin: 0 0 0 auto;
+  color: var(--muted);
+  font-size: var(--label);
+  text-align: right;
+}
+
+.head-row > button:not(.head-sub) {
+  align-self: center;
+}
+
 .repo-summary {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.1rem;
   width: 100%;
   background: transparent;
   color: inherit;
   border: 0;
   padding: 0;
+  margin-bottom: 0;
   text-align: left;
   font-weight: 400;
 }
@@ -195,9 +222,37 @@ a {
   outline: none;
 }
 
-.repo-bar button[type="submit"] {
+.repo-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   margin-top: 0.45rem;
-  justify-self: start;
+}
+
+.repo-actions button[type="submit"] {
+  flex-shrink: 0;
+}
+
+/* Takes the leftover width and wraps inside itself, so a long message never
+   moves the button. */
+.repo-status {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.repo-status:empty {
+  display: none;
+}
+
+.repo-status .status {
+  margin: 0;
+}
+
+.repo-bar > .repo-status .status {
+  margin-top: 0.55rem;
 }
 
 .status {
@@ -221,11 +276,6 @@ a {
 
 .status.warn {
   color: var(--uh-bar);
-}
-
-.probe-panel .status,
-.probe-panel .muted {
-  margin: 0.25rem 0 0.45rem;
 }
 
 .spinner {
@@ -353,18 +403,15 @@ button.hotspot code {
 
 .command-box {
   flex-shrink: 0;
+  /* Named container so the composer row can drop the prompt when tight. */
+  container: command / inline-size;
+  min-height: var(--bar-h);
   border-top: 1px solid var(--line);
   padding: var(--pad);
   background: var(--bg-2);
   display: flex;
   flex-direction: column;
   justify-content: center;
-}
-
-.command-box-sizer {
-  visibility: hidden;
-  pointer-events: none;
-  align-self: flex-start;
 }
 
 .command-bar {
@@ -375,12 +422,63 @@ button.hotspot code {
   flex-wrap: wrap;
 }
 
+/* Pinned so the bar's height comes from the token, not from label metrics. */
+.command-bar button,
+.work-row button {
+  display: inline-flex;
+  align-items: center;
+  height: var(--ctl-h);
+  padding: 0 0.7rem;
+}
+
 .command-bar:not(:last-child) {
   margin-bottom: 0.5rem;
 }
 
+/* Mode switch is a tab strip attached to the input, not a pair of buttons.
+   The row's bottom rule *is* the input's top edge, so the tabs sit flush on
+   the field and the selected one merges into it. */
+.compose-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.compose-prompt {
+  flex: 1;
+  min-width: 0;
+  margin: 0 0 0.35rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .command-mode {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.15rem;
   margin-left: auto;
+}
+
+.command-mode .tab {
+  /* Overlap the rule; the selected tab repaints it in the field colour. */
+  margin-bottom: -1px;
+}
+
+.compose-panel textarea {
+  /* The shared rule above replaces this edge. */
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
+}
+
+/* Not enough room for the full prompt beside the tabs: keep the tabs. The
+   threshold is the prompt's natural width plus the strip, plus the box's own
+   padding. */
+@container command (max-width: 34rem) {
+  .compose-prompt {
+    display: none;
+  }
 }
 
 .chips,
@@ -466,28 +564,32 @@ textarea:focus {
   border-bottom: 0;
 }
 
+/* Reads as an ordinary 1px divider. The transparent borders give it a real
+   grab target (pulled back by the negative margin so it costs no space), and
+   the resize cursor is what advertises that it moves. */
 .inspect-split {
   flex: none;
-  height: 6px;
+  box-sizing: content-box;
+  height: 1px;
+  background: var(--line);
+  background-clip: padding-box;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  margin: -3px 0;
+  position: relative;
+  z-index: 1;
   cursor: ns-resize;
   touch-action: none;
-  background: var(--bg-2);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
 }
 
 .inspect-split:hover,
 .inspect-split:focus-visible {
-  background: var(--hunk);
+  background-color: var(--accent);
 }
 
 .repo-map {
   overflow: auto;
   padding: var(--pad);
-}
-
-.map-blurb h2 {
-  margin: 0 0 0.3rem;
 }
 
 .map-blurb p {
@@ -572,9 +674,11 @@ textarea:focus {
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
+  min-height: var(--bar-h);
   padding: var(--pad);
   border-bottom: 1px solid var(--line);
   background: var(--bg-2);
+  flex-shrink: 0;
 }
 
 .file-inspect-head h2 {
@@ -584,6 +688,8 @@ textarea:focus {
   margin: 0;
   min-width: 0;
   overflow: hidden;
+  /* Pane title, so it matches the other main heads; `kind-label` is its sub. */
+  font-size: var(--title);
 }
 
 .file-inspect-head h2 code {
@@ -601,11 +707,67 @@ textarea:focus {
   font-size: var(--label);
 }
 
+/* GitHub PR tab bar: boxed selected tab sitting on the header rule. */
 .tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
+  align-self: flex-end;
+  align-items: flex-end;
+  gap: 0.15rem;
   flex-shrink: 0;
+  /* Drop through the header padding so the tab bottom edge lands on the
+     header's 1px bottom border, which the selected tab then paints over. */
+  margin-bottom: calc(-1 * var(--pad-y) - 1px);
+}
+
+button.tab {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: transparent;
+  /* Keep fills out of the transparent bottom border, which sits on the rule
+     below: only `.current` is allowed to paint over that. */
+  background-clip: padding-box;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: 6px 6px 0 0;
+  padding: 0.4rem 0.7rem;
+  font-size: var(--heading);
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+button.tab:hover:not(.current) {
+  background-color: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink);
+}
+
+button.tab.current {
+  background: var(--bg);
+  color: var(--ink);
+  font-weight: 600;
+  border-color: var(--line);
+  /* Erase the header rule under the selected tab. */
+  border-bottom-color: var(--bg);
+}
+
+button.tab .octicon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+button.tab.current .octicon {
+  color: var(--ink);
+}
+
+.counter {
+  background: rgba(129, 139, 152, 0.2);
+  color: inherit;
+  border-radius: 2em;
+  padding: 0 0.4rem;
+  font-size: var(--label);
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .file-inspect-body {
@@ -737,6 +899,18 @@ textarea:focus {
   cursor: pointer;
 }
 
+/* More marks than the column fits: overlap them into a stack, and lift the one
+   under the pointer so every mark stays reachable. */
+.gutter-mark + .gutter-mark {
+  margin-left: -7px;
+  box-shadow: -1px 0 0 var(--bg);
+}
+
+.gutter-mark:hover,
+.gutter-mark:focus-visible {
+  z-index: 1;
+}
+
 .gutter-mark.look {
   background: var(--look-mark);
   color: #3b2f00;
@@ -796,13 +970,32 @@ button.hotspot {
   color: var(--btn-fg);
 }
 
+/* Both marks share the right edge of the line-number column, so neither one
+   shifts the code. A function header with a note bumps the note one slot left. */
 .run-mark,
 .note-mark {
-  background: transparent;
+  position: absolute;
+  left: calc(var(--mark-col) + var(--code-inset) + 3px);
+  width: 3.2em;
+  padding: 0 0.3em 0 0;
+  text-align: right;
   color: var(--accent);
+}
+
+.run-mark {
+  background: transparent;
   border: 0;
-  padding: 0 0.25rem 0 0;
   font-size: var(--label);
+  line-height: inherit;
+  border-radius: 0;
+}
+
+.note-mark {
+  pointer-events: none;
+}
+
+.note-mark.shifted {
+  padding-right: 1.1em;
 }
 
 .inline-composer {
@@ -821,30 +1014,124 @@ button.hotspot {
   padding: 0.5rem var(--code-inset);
 }
 
-.walk-note {
-  border: 0;
-  border-radius: 0;
-  padding: 0.5rem var(--code-inset);
-  background: var(--bg-2);
+/* Review threads sit in the code, GitHub-style: a summary row that opens. */
+.inline-thread {
+  /* Prose, not code: the surrounding pre must not set the font here. */
+  font-family: var(--ui-font);
+  margin-right: calc(var(--code-inset) + 1.5rem);
 }
 
-.walk-note.look {
-  box-shadow: -3px 0 0 var(--look-mark);
+.off-diff > p {
+  margin: 0.5rem 0 0.35rem;
 }
 
-.walk-note.uh {
-  box-shadow: -3px 0 0 var(--uh-bar);
+.off-diff > div + div {
+  margin-top: 0.35rem;
 }
 
-.walk-note h3 {
+.note-thread {
+  font-family: var(--ui-font);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.note-thread.resolved {
+  opacity: 0.75;
+}
+
+/* Tone comes from the left edge, matching the range highlight in the code. */
+.note-thread.look {
+  box-shadow: inset 3px 0 0 var(--look-mark);
+}
+
+.note-thread.uh {
+  box-shadow: inset 3px 0 0 var(--uh-bar);
+}
+
+.note-thread h3 {
   margin: 0 0 0.3rem;
   font-size: var(--heading);
 }
 
-.composer,
-.probe-panel,
-.notes,
-.note-thread {
+.note-thread-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+
+.note-thread-head:hover {
+  background-color: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.note-thread.open .note-thread-head {
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+}
+
+.note-thread-title {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.note-thread-peek {
+  color: var(--muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.note-resolved {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--muted);
+  font-size: var(--label);
+}
+
+.note-thread-body {
+  padding: 0.6rem;
+}
+
+.note-comment + .note-comment {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+
+.note-who {
+  margin: 0 0 0.2rem;
+  font-weight: 600;
+  font-size: var(--label);
+}
+
+.note-thread-foot {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+
+/* Actions sit on their own ruled row under the input, bleeding to the box
+   edges the way GitHub's do. */
+.note-thread-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.6rem -0.6rem -0.6rem;
+  padding: 0.6rem;
+  border-top: 1px solid var(--line);
+  background: var(--bg-2);
+}
+
+.composer {
   border-top: 1px solid var(--line);
   padding: 0.65rem 1rem 0.85rem;
   background: var(--bg-2);
@@ -853,50 +1140,249 @@ button.hotspot {
   overflow: auto;
 }
 
-.composer h3,
-.probe-panel h3,
-.notes h3 {
+.composer h3 {
   margin: 0 0 0.4rem;
 }
 
-.notes-head {
+/* The sandbox takes most of the screen: editing a function and reading what it
+   returns both need room, and it is a modal task either way. */
+.sandbox-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 2vmin;
+  background: rgba(31, 35, 40, 0.45);
+}
+
+.sandbox {
+  display: flex;
+  flex-direction: column;
+  width: min(96vw, 1200px);
+  height: min(92vh, 900px);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 16px 48px rgba(31, 35, 40, 0.25);
+  overflow: hidden;
+}
+
+.sandbox:focus {
+  outline: none;
+}
+
+.sandbox-head {
+  position: relative;
+  align-items: center;
+  /* The rule is this header's own bottom border, so no gap under it. */
+  margin-bottom: 0;
+  /* Room for the close button, which is lifted out of the flow below so it
+     cannot stretch the baseline the title and its sub share. */
+  padding: var(--pad-y) calc(1rem + var(--ctl-h) + 0.5rem) var(--pad-y) 1rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+}
+
+.sandbox-head h2 {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
-  margin-bottom: 0.4rem;
-}
-
-.notes-head h3,
-.notes-head p {
   margin: 0;
 }
 
-.notes-collapsed {
-  display: flex;
-  justify-content: flex-end;
+.sandbox-head p {
+  margin: 0;
 }
 
-.notes ul {
-  list-style: none;
-  margin: 0;
+.sandbox-close {
+  position: absolute;
+  top: 50%;
+  right: 1rem;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: var(--ctl-h);
+  height: var(--ctl-h);
   padding: 0;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
 }
 
-.notes li {
+.sandbox-body {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 1px;
+  flex: 1;
+  min-height: 0;
+  background: var(--line);
+}
+
+.sandbox-side {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1px;
+  min-height: 0;
+  background: var(--line);
+}
+
+.sandbox-pane {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--pad);
+  gap: 0.4rem;
+  background: var(--bg);
+  overflow: auto;
+}
+
+.sandbox-pane-head h3 {
+  margin: 0;
+  font-size: var(--heading);
+}
+
+.sandbox-pane-head p {
+  margin: 0;
+}
+
+.sandbox-pane .status,
+.sandbox-pane .muted {
+  margin: 0;
+}
+
+/* Same merge as the composer: the tabs overlap one shared rule, and the panel
+   below takes that rule as its top edge instead of drawing its own. */
+.sandbox-pane.tabbed {
+  gap: 0;
+}
+
+.sandbox-pane.tabbed .sandbox-pane-head {
+  position: relative;
+  align-items: flex-end;
+  margin-bottom: 0;
+  /* Breathing room above the tabs and the button, held by the header itself so
+     the pane without a button keeps it. Height comes from the tabs alone, so
+     switching panes cannot shift the rule or the panel below it. */
+  padding-top: 0.35rem;
+  min-height: calc(var(--ctl-h) + 0.35rem);
+  border-bottom: 1px solid var(--line);
+}
+
+.sandbox-pane.tabbed .tabs {
+  /* Overlap the rule; the selected tab repaints it in the pane colour. */
+  margin-bottom: -1px;
+}
+
+/* Lifted out of the flow for the same reason as the modal's close button. */
+.sandbox-pane.tabbed .sandbox-pane-head > button {
+  position: absolute;
+  right: 0;
+  bottom: 0.35rem;
+  margin: 0;
+}
+
+/* Both panes read as one surface hanging off the tab rule: same edges, and
+   the `.code` rule's zero side padding replaced so text clears the border. */
+.sandbox-pane.tabbed .sandbox-source,
+.sandbox-pane.tabbed .sandbox-about {
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
+  padding: 0.6rem 0.75rem;
+}
+
+/* Holds whichever pane the tabs chose, so the editor still fills the column. */
+.sandbox-pane-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Explanation, not code: prose font, and the parsed facts kept subordinate. */
+.sandbox-about {
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Nothing asked yet: the button is the whole point of the pane, so it sits in
+   the body with the sentence that says what it will do. */
+.sandbox-about.waiting {
+  align-items: flex-start;
   gap: 0.5rem;
+}
+
+.sandbox-about-foot {
+  margin-top: auto;
+  padding-top: 0.25rem;
+}
+
+.sandbox-about section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.sandbox-about h4 {
+  margin: 0;
+  font-size: var(--heading);
+  font-weight: 600;
+}
+
+.sandbox-about p {
+  margin: 0;
+}
+
+.sandbox-concept,
+.sandbox-watch {
+  padding-left: 0.6rem;
+}
+
+.sandbox-concept {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.sandbox-watch {
+  box-shadow: inset 3px 0 0 var(--uh-bar);
+}
+
+.sandbox-facts {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.sandbox-source,
+.sandbox-args {
+  flex: 1;
+  min-height: 6rem;
+  resize: none;
+  white-space: pre;
+  overflow: auto;
+}
+
+.sandbox-out pre {
+  margin: 0;
+}
+
+.sandbox-foot {
+  display: flex;
   align-items: center;
-  margin: 0.25rem 0;
+  gap: 0.75rem;
+  padding: var(--pad);
+  border-top: 1px solid var(--line);
+  background: var(--bg-2);
 }
 
-.notes li.resolved {
-  opacity: 0.6;
-}
-
-.probe-out {
-  margin-top: 0.5rem;
+.sandbox-foot p {
+  margin: 0;
 }
 
 @media (max-width: 900px) {
@@ -917,4 +1403,86 @@ button.hotspot {
     border-top-color: var(--line);
     background: var(--accent);
   }
+}
+
+/* Design mode (?design): fixture states behind a floating picker, so the
+   control never takes space from the layout being reviewed. */
+.design-dock {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.design-fab {
+  /* Grid centering so the glyph is optically centered, not baseline-placed. */
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(31, 35, 40, 0.24);
+}
+
+.design-panel {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(31, 35, 40, 0.16);
+  padding: 0.35rem;
+  width: 15rem;
+  max-height: min(70vh, 30rem);
+  overflow: auto;
+}
+
+.design-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+button.design-item {
+  display: block;
+  width: 100%;
+  background: transparent;
+  color: var(--ink);
+  border: 0;
+  border-radius: 6px;
+  padding: 0.3rem 0.45rem;
+  text-align: left;
+  font-weight: 500;
+  font-size: var(--label);
+}
+
+button.design-item:hover {
+  background: var(--bg-2);
+}
+
+button.design-item.current {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.design-hint {
+  margin: 0.35rem 0 0.1rem;
+  padding: 0 0.45rem;
+  color: var(--muted);
+  font-size: var(--label);
+}
+
+.design-dock kbd {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 0.9em;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 0.25em;
 }

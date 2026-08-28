@@ -39,7 +39,6 @@ export function CommandBox({
   const canExport = phase === "wrapup" || phase === "done";
   const showBar = !disabled && (chips.length > 0 || textMode || canExport);
   const showForm = textMode && !disabled;
-  const emptyBar = !disabled && !showBar && !showForm;
 
   async function copyNotes() {
     if (!session) return;
@@ -91,78 +90,82 @@ export function CommandBox({
               {copied ? "Copied" : "Copy review notes"}
             </button>
           )}
-          {textMode && (
-            <div
-              className="chips command-mode"
-              role="group"
-              aria-label="Message type"
-            >
-              <button
-                type="button"
-                className={mode === "teachback" ? undefined : "secondary"}
-                onClick={() => setMode("teachback")}
-              >
-                Teach-back
-              </button>
-              <button
-                type="button"
-                className={mode === "ask" ? undefined : "secondary"}
-                onClick={() => setMode("ask")}
-              >
-                Ask
-              </button>
-            </div>
-          )}
         </div>
-      )}
-      {emptyBar && (
-        <button
-          type="button"
-          className="command-box-sizer"
-          tabIndex={-1}
-          aria-hidden="true"
-        >
-          File
-        </button>
       )}
       {showForm && (
         <>
-          <label htmlFor="command">
-            {mode === "ask" ? "Question about this file" : prompt}
-          </label>
-          <textarea
-            id="command"
-            rows={3}
-            value={text}
-            disabled={disabled}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (canSend && !disabled) {
+          {/* Prompt left, tabs right, both on the input's top edge. The prompt
+              is dropped by a container query when the row gets tight. */}
+          <div className="compose-head">
+            <label className="compose-prompt" htmlFor="command">
+              {mode === "ask" ? "Question about this file" : prompt}
+            </label>
+            <div
+              className="command-mode"
+              role="tablist"
+              aria-label="Message type"
+            >
+              {MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="tab"
+                  id={`mode-${m.id}`}
+                  aria-controls="command-panel"
+                  aria-selected={mode === m.id}
+                  className={mode === m.id ? "tab current" : "tab"}
+                  onClick={() => setMode(m.id)}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div
+            className="compose-panel"
+            role="tabpanel"
+            id="command-panel"
+            aria-labelledby={`mode-${mode}`}
+          >
+            <textarea
+              id="command"
+              rows={3}
+              value={text}
+              disabled={disabled}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (canSend && !disabled) {
+                    onSend(text, mode);
+                    setText("");
+                  }
+                }
+              }}
+            />
+            <div className="row">
+              <button
+                type="button"
+                disabled={disabled || !canSend}
+                onClick={() => {
                   onSend(text, mode);
                   setText("");
-                }
-              }
-            }}
-          />
-          <div className="row">
-            <button
-              type="button"
-              disabled={disabled || !canSend}
-              onClick={() => {
-                onSend(text, mode);
-                setText("");
-              }}
-            >
-              {mode === "ask" ? "Ask" : "Send"}
-            </button>
+                }}
+              >
+                Send
+              </button>
+            </div>
           </div>
         </>
       )}
     </div>
   );
 }
+
+const MODES: { id: "teachback" | "ask"; label: string }[] = [
+  { id: "teachback", label: "Teach-back" },
+  { id: "ask", label: "Ask" },
+];
 
 function canSubmitText(phase: Phase | undefined): boolean {
   return phase === "file" || phase === "wrapup";

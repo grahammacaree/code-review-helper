@@ -9,10 +9,17 @@ import {
   generateOverview,
   gradeTeachback,
   answerFileQuestion,
+  explainFunction as explainFunctionProse,
   updateWalkCommentary,
 } from "./agent.js";
-import { runFunction } from "./probe.js";
-import { suggestArgs } from "./samples.js";
+import {
+  functionAtLine,
+  probeId,
+  runFunction,
+  type FnBlock,
+} from "./probe.js";
+import { findCallers, suggestArgs } from "./samples.js";
+import { escapeRe } from "./strings.js";
 import {
   changedFiles,
   checkoutBranch,
@@ -41,6 +48,20 @@ import {
 } from "./scaffold.js";
 import { formatRepoLens, loadRepoLens } from "./repoLens.js";
 import {
+  conceptsForPath,
+  conceptsMentioned,
+  conceptsNote,
+  loadRepoConcepts,
+  type RepoConcept,
+} from "./concepts.js";
+import {
+  conceptDepth,
+  loadConceptMemory,
+  recordConceptWalk,
+  saveConceptMemory,
+  type ConceptForCard,
+} from "./conceptMemory.js";
+import {
   loadCommentary,
   type CommentaryBundle,
 } from "./commentary.js";
@@ -54,6 +75,7 @@ import type {
   FileCard,
   FileEntry,
   FileWiring,
+  FunctionBrief,
   MessageKind,
   MessageRole,
   Phase,
@@ -105,11 +127,15 @@ interface Session {
   paraphrases: { path: string; text: string }[];
   homeRestored: boolean;
   commentaryWritten: boolean;
+  conceptsRecorded: boolean;
   cancel?: AbortController;
   wiringImportIndex?: Map<string, WiringImport[]>;
   wiringImportScopeKey?: string;
   commentary?: CommentaryBundle;
   chaseCandidates: ChaseCandidate[];
+  concepts?: RepoConcept[];
+  /** Sandbox explanations, keyed path:startLine. Rebuilt after a restart. */
+  briefs?: Map<string, FunctionBrief>;
 }
 
 const sessions = new Map<string, Session>();
@@ -124,6 +150,8 @@ function persist(s: Session): void {
     wiringImportIndex,
     wiringImportScopeKey,
     commentary,
+    concepts,
+    briefs,
     busy,
     workingOn,
     ...rest
@@ -215,6 +243,7 @@ function hydrate(raw: unknown): Session | undefined {
         )
       : [],
     commentaryWritten: Boolean(o.commentaryWritten),
+    conceptsRecorded: Boolean(o.conceptsRecorded),
     homeRestored:
       Boolean(o.homeRestored) ||
       (o.messages ?? []).some(
@@ -491,6 +520,7 @@ export async function startSession(input: {
     paraphrasedCurrent: false,
     paraphrases: [],
     commentaryWritten: false,
+    conceptsRecorded: false,
     homeRestored: false,
   };
   sessions.set(id, s);
@@ -571,11 +601,12 @@ async function runOverview(s: Session, mode: "all" | "core"): Promise<void> {
   throwIfAborted(s);
   s.workingOn = "Mapping the PR…";
   const branch = await currentBranch(s.repoPath);
-  const lens = await loadRepoLens(
-    s.repoPath,
-    s.files.map((f) => f.path),
-  );
-  const repoNote = formatRepoLens(lens);
+  const paths = s.files.map((f) => f.path);
+  const lens = await loadRepoLens(s.repoPath, paths);
+  s.concepts = await loadRepoConcepts(s.repoPath, paths);
+  const repoNote = [formatRepoLens(lens), conceptsNote(s.concepts)]
+    .filter(Boolean)
+    .join("\n\n") || undefined;
   const commentary = await ensureCommentary(s);
   s.overview = await withAgent(s, (agent) =>
     generateOverview({
@@ -692,6 +723,7 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
   if (!entry) throw new Error(`Unknown queued file: ${path}`);
   s.workingOn = `Writing file card ${index + 1}/${s.queue.length}…`;
   const commentary = await ensureCommentary(s);
+  const concepts = entry.chase ? [] : await conceptsForCard(s, path);
   const card = entry.chase
     ? await withAgent(s, (agent) =>
         generateChaseCard({
@@ -717,6 +749,7 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
           prUrl: s.prUrl,
           overview: s.overview,
           commentary,
+          concepts,
         }),
       );
   s.card = card;
@@ -912,6 +945,64 @@ export async function continueAfterQuestion(
   return withBusy(s, async () => {
     await advanceToFile(s, nextQueueIndex(s));
   });
+}
+
+/** Concepts are cheap to detect but not persisted; rebuild after a restart. */
+async function ensureConcepts(s: Session): Promise<RepoConcept[]> {
+  if (!s.concepts) {
+    s.concepts = await loadRepoConcepts(
+      s.repoPath,
+      s.files.map((f) => f.path),
+    );
+  }
+  return s.concepts;
+}
+
+/**
+ * Systems this path sits on, each tagged with how much scaffolding he needs
+ * based on what earlier walks already taught him.
+ */
+async function conceptsForCard(
+  s: Session,
+  path: string,
+): Promise<ConceptForCard[]> {
+  const onPath = conceptsForPath(await ensureConcepts(s), path);
+  if (!onPath.length) return [];
+  const memory = await loadConceptMemory();
+  const here = s.commentary?.key;
+  return onPath.map((c) => {
+    const seenIn = (memory.concepts[c.id]?.repos ?? []).filter(
+      (repo) => repo !== here,
+    );
+    return {
+      ...c,
+      depth: conceptDepth(memory, c.id),
+      seenIn: seenIn.slice(-3),
+    };
+  });
+}
+
+/** Concepts this walk taught, and the ones he engaged with in his own words. */
+function conceptWalkTally(s: Session): { taught: string[]; engaged: string[] } {
+  const concepts = s.concepts ?? [];
+  if (!concepts.length) return { taught: [], engaged: [] };
+  const taught: string[] = [];
+  for (const card of s.cards) {
+    if (!card.concept) continue;
+    for (const c of conceptsForPath(concepts, card.path)) {
+      if (!taught.includes(c.id)) taught.push(c.id);
+    }
+  }
+  if (!taught.length) return { taught, engaged: [] };
+  const hisWords = s.messages
+    .filter((m) => m.role === "user" && typeof m.text === "string")
+    .map((m) => m.text)
+    .join("\n");
+  const engaged = conceptsMentioned(
+    concepts.filter((c) => taught.includes(c.id)),
+    hisWords,
+  );
+  return { taught, engaged };
 }
 
 function nextQueueIndex(s: Session): number {
@@ -1227,6 +1318,11 @@ function commentaryEvidence(s: Session): string {
       : "",
     s.overview ? `Why: ${s.overview.why.slice(0, 400)}` : "",
     `Covered: ${s.covered.join(", ") || "(none)"}`,
+    s.concepts?.length
+      ? `Systems this checkout runs on (detected): ${s.concepts
+          .map((c) => c.name)
+          .join(", ")}`
+      : "",
     `Files:\n${files.join("\n") || "(none)"}`,
     skips.length ? `Skipped:\n${skips.join("\n")}` : "",
     lingering ? `Lingering uh-ohs:\n${lingering.slice(0, 1500)}` : "",
@@ -1255,6 +1351,30 @@ async function maybeWriteCommentary(s: Session): Promise<void> {
     s.commentary = await loadCommentary(s.repoPath);
   } catch {
     // Best-effort. A failed notes rewrite must not fail the walk.
+  }
+  await maybeRecordConcepts(s);
+}
+
+/**
+ * Mark what this walk taught against his profile so the next walk can pitch the
+ * same system deeper instead of re-explaining it from scratch.
+ */
+async function maybeRecordConcepts(s: Session): Promise<void> {
+  if (s.conceptsRecorded) return;
+  const { taught, engaged } = conceptWalkTally(s);
+  if (!taught.length) return;
+  try {
+    const memory = await loadConceptMemory();
+    await saveConceptMemory(
+      recordConceptWalk(memory, {
+        taught,
+        engaged,
+        repoKey: s.commentary?.key ?? "",
+      }),
+    );
+    s.conceptsRecorded = true;
+  } catch {
+    // Best-effort. Losing a tally must not fail the walk.
   }
 }
 
@@ -1444,9 +1564,159 @@ export async function suggestProbeArgs(
   });
 }
 
+/**
+ * What a function does and why, for the sandbox's About tab. Facts come from the
+ * checkout, the prose from the agent reading those facts alongside the repo's
+ * concept and commentary notes. Cached per function: the reviewer will open the
+ * tab more than once while editing.
+ */
+export async function explainFunction(
+  id: string,
+  line: number,
+  signal?: AbortSignal,
+  /** An explicit re-ask: skip the cache and put the question again. */
+  refresh = false,
+): Promise<FunctionBrief> {
+  const s = get(id);
+  if (!s.card || !s.fileText) {
+    throw new Error("Open a file before asking about a function.");
+  }
+  const path = s.card.path;
+  const fn = functionAtLine(s.fileText, line, path);
+  if (!fn) {
+    throw new Error("No function found at that line.");
+  }
+  const key = probeId(path, fn.startLine);
+  const cached = refresh ? undefined : s.briefs?.get(key);
+  if (cached) return cached;
+
+  const source = s.fileText
+    .split("\n")
+    .slice(fn.startLine - 1, fn.endLine)
+    .join("\n");
+  const facts = await functionFacts(s, fn, signal);
+  if (!s.agent) {
+    throw new Error(
+      "The walkthrough agent is not running. Check out a PR to get an explanation.",
+    );
+  }
+  const concepts = await conceptsForCard(s, path);
+  const prose = await explainFunctionProse({
+    agent: s.agent,
+    path,
+    name: fn.name,
+    source,
+    facts,
+    card: s.card,
+    concepts,
+    commentary: await ensureCommentary(s),
+  });
+  const brief: FunctionBrief = {
+    id: key,
+    name: fn.name,
+    facts,
+    ...prose,
+    conceptName: prose.concept ? concepts[0]?.name : undefined,
+  };
+  s.briefs ??= new Map();
+  s.briefs.set(key, brief);
+  return brief;
+}
+
+/** Everything about the function we can establish without asking the model. */
+async function functionFacts(
+  s: Session,
+  fn: FnBlock,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const path = s.card!.path;
+  const facts: string[] = [
+    `Signature: ${fn.header.trim()}`,
+    `Lines ${fn.startLine}–${fn.endLine} of ${path} (${fn.endLine - fn.startLine + 1} lines).`,
+  ];
+
+  const doc = docComment(s.fileText!, fn.startLine);
+  if (doc) facts.push(`Comment above it: ${doc}`);
+
+  const exported = s.fileWiring?.exports.find((e) => e.name === fn.name);
+  facts.push(
+    exported
+      ? `Exported from this file (${exported.kind}), so callers outside it can reach it.`
+      : "Not exported: only this file can call it.",
+  );
+
+  const body = s.fileText!
+    .split("\n")
+    .slice(fn.startLine - 1, fn.endLine)
+    .join("\n");
+  const used = (s.fileWiring?.imports ?? []).flatMap((imp) =>
+    imp.names
+      .filter((name) => new RegExp(`\\b${escapeRe(name)}\\b`).test(body))
+      .map((name) => `${name} from ${imp.from}`),
+  );
+  if (used.length) {
+    facts.push(`Imports it uses: ${used.slice(0, 6).join(", ")}.`);
+  }
+
+  const callers = await findCallers({
+    repoPath: s.repoPath,
+    path,
+    name: fn.name,
+    signal,
+  });
+  const inChange = new Set(s.files.map((f) => f.path));
+  const real = callers.filter((c) => !c.test);
+  facts.push(
+    callers.length === 0
+      ? "Nothing in the checkout calls it by name (it may be a handler, an export for another package, or called dynamically)."
+      : `Called from: ${callers
+          .slice(0, 6)
+          .map(
+            (c) =>
+              `${c.path}:${c.line}${c.test ? " (test)" : ""}${inChange.has(c.path) ? " [changed in this PR]" : ""}`,
+          )
+          .join(", ")}${callers.length > 6 ? `, +${callers.length - 6} more` : ""}.`,
+  );
+  if (callers.length && real.length === 0) {
+    facts.push("Every caller is a test: nothing in production calls it yet.");
+  }
+
+  const focus = s.card!.focus.some(
+    (r) => r.start <= fn.endLine && r.end >= fn.startLine,
+  );
+  facts.push(
+    focus
+      ? "This PR changes lines inside this function."
+      : "This PR does not change lines inside this function.",
+  );
+  return facts;
+}
+
+/** The JSDoc or comment block sitting directly above the header. */
+function docComment(fileText: string, startLine: number): string | undefined {
+  const lines = fileText.split("\n");
+  const out: string[] = [];
+  for (let i = startLine - 2; i >= 0; i -= 1) {
+    const line = lines[i].trim();
+    if (!line) break;
+    if (line.startsWith("//") || line.startsWith("#")) {
+      out.unshift(line.replace(/^(\/\/|#)\s?/, ""));
+      continue;
+    }
+    if (line.endsWith("*/") || line.startsWith("*") || line.startsWith("/*")) {
+      out.unshift(line.replace(/^\/?\*+\/?/, "").replace(/\*\/$/, "").trim());
+      if (line.startsWith("/*")) break;
+      continue;
+    }
+    break;
+  }
+  const text = out.filter(Boolean).join(" ").trim();
+  return text ? text.slice(0, 500) : undefined;
+}
+
 export async function probeFunction(
   id: string,
-  input: { line: number; args: unknown[] },
+  input: { line: number; args: unknown[]; source?: string },
 ): Promise<SessionSnapshot> {
   const s = get(id);
   if (!s.card || !s.fileText) {
@@ -1459,6 +1729,7 @@ export async function probeFunction(
       fileText: s.fileText!,
       line: input.line,
       args: input.args,
+      source: input.source,
     });
     s.probe = result;
     push(s, {

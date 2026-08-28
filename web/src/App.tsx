@@ -1,12 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { api, createSession, getAuth, getSession } from "./api";
-import { ChatColumn } from "./components/ChatColumn";
 import type { ChipAction } from "./components/CommandBox";
-import { FileInspect, type FileTab } from "./components/FileInspect";
-import { InspectSplit } from "./components/InspectSplit";
-import { RepoMap } from "./components/RepoMap";
+import { WalkView } from "./components/WalkView";
 import { loadRecentRepos, rememberRepo, displayRepo, loadSessionId, rememberSession, forgetSession } from "./recents";
-import type { AuthStatus, LookCloser, SessionSnapshot } from "./types";
+import type { AuthStatus, SessionSnapshot } from "./types";
 
 export function App() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
@@ -18,9 +15,6 @@ export function App() {
     loadRecentRepos(),
   );
   const [pr, setPr] = useState("");
-  const [tab, setTab] = useState<FileTab>("file");
-  const [focusLine, setFocusLine] = useState<number | undefined>();
-  const [walkNote, setWalkNote] = useState<LookCloser | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -64,18 +58,6 @@ export function App() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    setFocusLine(session?.focusLine);
-  }, [session?.card?.path, session?.focusLine]);
-
-  useEffect(() => {
-    setWalkNote(null);
-  }, [session?.card?.path]);
-
-  useEffect(() => {
-    if (session?.card?.path) setTab("file");
-  }, [session?.card?.path]);
 
   useEffect(() => {
     if (!busy || !session?.id) return;
@@ -123,28 +105,6 @@ export function App() {
     setBusy(false);
   }
 
-  function onLookCloser(hotspot: LookCloser) {
-    setTab("file");
-    setFocusLine(hotspot.startLine);
-    setWalkNote((cur) =>
-      cur &&
-      cur.startLine === hotspot.startLine &&
-      cur.endLine === hotspot.endLine &&
-      cur.why === hotspot.why
-        ? null
-        : hotspot,
-    );
-  }
-
-  function onSend(text: string, mode: "ask" | "teachback") {
-    if (!session) return;
-    void run((signal) =>
-      mode === "ask"
-        ? api.ask(session.id, text, signal)
-        : api.teachback(session.id, text, signal),
-    );
-  }
-
   function onAction(action: ChipAction) {
     if (action === "reset") {
       forgetSession();
@@ -170,104 +130,76 @@ export function App() {
   const working = busy || Boolean(session?.busy);
 
   return (
-    <div className="app">
-      <ChatColumn
-        auth={auth}
-        session={session}
-        error={error}
-        busy={working}
-        workLabel={session?.workingOn}
-        repoPath={repoPath}
-        recentRepos={recentRepos}
-        pr={pr}
-        onRepoPath={setRepoPath}
-        onPr={setPr}
-        onCheckout={() => {
+    <WalkView
+      auth={auth}
+      session={session}
+      error={error}
+      busy={working}
+      repoPath={repoPath}
+      recentRepos={recentRepos}
+      pr={pr}
+      actions={{
+        onRepoPath: setRepoPath,
+        onPr: setPr,
+        onCheckout: () => {
           void run(async (signal) => {
             const snap = await createSession({ repoPath, pr }, signal);
             setRecentRepos(rememberRepo(snap.repoPath));
             setRepoPath(displayRepo(snap.repoPath));
             return snap;
           });
-        }}
-        onSend={onSend}
-        onAction={onAction}
-        onInterrupt={onInterrupt}
-        onLookCloser={onLookCloser}
-      />
-      <InspectSplit
-        expandTop={!session?.card}
-        top={
-          <RepoMap
-            files={session?.files ?? []}
-            queue={session?.queue ?? []}
-            covered={session?.covered ?? []}
-            currentPath={session?.card?.path}
-            howItConnects={session?.overview?.howItConnects}
-            browseable={
-              session?.phase === "wrapup" || session?.phase === "done"
-            }
-            onOpenFile={(path) => {
-              if (!session) return;
-              void run((signal) => api.browse(session.id, path, signal));
-            }}
-          />
-        }
-        bottom={
-          <FileInspect
-            card={session?.card}
-            fileText={session?.fileText}
-            diffText={session?.diffText}
-            fileWiring={session?.fileWiring}
-            overview={session?.overview}
-            chaseCandidates={session?.chaseCandidates}
-            onChase={(path) => {
-              if (!session) return;
-              void run((signal) => api.chase(session.id, [path], signal));
-            }}
-            focusLine={focusLine}
-            walkNote={walkNote}
-            tab={tab}
-            annotations={session?.annotations ?? []}
-            probe={session?.probe}
-            busy={working}
-            onTab={setTab}
-            onAnnotate={(input) => {
-              if (!session?.card) return;
-              void run((signal) =>
-                api.annotate(
-                  session.id,
-                  { ...input, path: session.card!.path },
-                  signal,
-                ),
-              );
-            }}
-            onReply={(annotationId, text) => {
-              if (!session) return;
-              void run((signal) =>
-                api.replyAnnotation(session.id, annotationId, text, signal),
-              );
-            }}
-            onResolve={(annotationId) => {
-              if (!session) return;
-              void run(() => api.resolveAnnotation(session.id, annotationId));
-            }}
-            onProbe={(line, args) => {
-              if (!session) return;
-              void run((signal) => api.probe(session.id, line, args, signal));
-            }}
-            onSuggestArgs={(line, signal) => {
-              if (!session) {
-                return Promise.reject(new Error("No session."));
-              }
-              return api.probeArgs(session.id, line, signal);
-            }}
-            onLookCloser={onLookCloser}
-            onCloseWalkNote={() => setWalkNote(null)}
-          />
-        }
-      />
-    </div>
+        },
+        onSend: (text, mode) => {
+          if (!session) return;
+          void run((signal) =>
+            mode === "ask"
+              ? api.ask(session.id, text, signal)
+              : api.teachback(session.id, text, signal),
+          );
+        },
+        onAction,
+        onInterrupt,
+        onBrowse: (path) => {
+          if (!session) return;
+          void run((signal) => api.browse(session.id, path, signal));
+        },
+        onChase: (path) => {
+          if (!session) return;
+          void run((signal) => api.chase(session.id, [path], signal));
+        },
+        onAnnotate: (input) => {
+          if (!session?.card) return;
+          const path = session.card.path;
+          void run((signal) =>
+            api.annotate(session.id, { ...input, path }, signal),
+          );
+        },
+        onReply: (annotationId, text) => {
+          if (!session) return;
+          void run((signal) =>
+            api.replyAnnotation(session.id, annotationId, text, signal),
+          );
+        },
+        onResolve: (annotationId) => {
+          if (!session) return;
+          void run(() => api.resolveAnnotation(session.id, annotationId));
+        },
+        onProbe: (line, args, source) => {
+          if (!session) return;
+          void run((signal) =>
+            api.probe(session.id, line, args, source, signal),
+          );
+        },
+        onSuggestArgs: (line, signal) => {
+          if (!session) return Promise.reject(new Error("No session."));
+          return api.probeArgs(session.id, line, signal);
+        },
+        onExplainFunction: (line, signal, refresh) => {
+          if (!session) return Promise.reject(new Error("No session."));
+          return api.functionBrief(session.id, line, signal, refresh);
+        },
+      }}
+    />
   );
 }
 

@@ -7,6 +7,8 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { projectRoot } from "./env.js";
 import { dummyArgs, functionAtLine } from "./probe.js";
+import { shapeArgs, type Shaped } from "./shapes.js";
+import { balanced, escapeRe, evalLiteral } from "./strings.js";
 import type { ProbeArgSuggestion } from "./types.js";
 
 const execFileAsync = promisify(execFile);
@@ -49,14 +51,26 @@ export async function suggestArgs(opts: {
   signal?: AbortSignal;
 }): Promise<ProbeArgSuggestion> {
   const fn = functionAtLine(opts.fileText, opts.line, opts.path);
-  const fallback = dummyArgs(fn?.params ?? []);
+  const dummies = dummyArgs(fn?.params ?? []);
   if (!fn) {
+    const fallback = dummies;
     return {
       args: fallback,
       note: "No function found at that line; using placeholders.",
       kind: "placeholder",
     };
   }
+
+  // Types first, so every parameter has a plausible value even when a test only
+  // gives us the first one.
+  const shaped = await shapeArgs(
+    fn.params,
+    opts.fileText,
+    join(opts.repoPath, opts.path),
+  );
+  const fallback = fn.params.map((_p, i) =>
+    shaped[i]?.known ? shaped[i].value : dummies[i],
+  );
 
   const testHits = await findTestHits(
     opts.repoPath,
@@ -141,7 +155,31 @@ export async function suggestArgs(opts: {
     };
   }
 
+  const callHit = await sampleFromCallSites(
+    opts.repoPath,
+    opts.path,
+    fn.name,
+    snippets,
+    opts.signal,
+  );
+  if (callHit) {
+    return {
+      args: mergeArgs(callHit.args, fallback),
+      note: `No test sample for ${fn.name}. Arguments taken from the call in ${rel(opts.repoPath, callHit.hit.file)}:${callHit.hit.line}.`,
+      source: callHit.hit.file,
+      kind: "callsite",
+    };
+  }
+
   const typeLabel = types[0] ?? "this argument";
+  const shapedNote = describeShapes(fn.params, shaped);
+  if (shapedNote) {
+    return {
+      args: fallback,
+      note: `${fixtureMiss ? `Found ${fixtureMiss} but could not evaluate it. ` : ""}No test or fixture argument for ${fn.name}; built from ${shapedNote}. Edit anything that looks wrong.`,
+      kind: "shape",
+    };
+  }
   if (fixtureMiss) {
     return {
       args: fallback,
@@ -162,6 +200,127 @@ export async function suggestArgs(opts: {
     note: `No tests call ${fn.name}, and no fixture builder was found for ${typeLabel}. Placeholders only (${typeLabel} is ${JSON.stringify(fallback[0] ?? null)}).`,
     kind: "placeholder",
   };
+}
+
+/** Where else this function is called, nearest thing to "who needs this". */
+export async function findCallers(opts: {
+  repoPath: string;
+  path: string;
+  name: string;
+  signal?: AbortSignal;
+}): Promise<{ path: string; line: number; test: boolean }[]> {
+  const hits = await grep(
+    opts.repoPath,
+    wordPattern(opts.name, "[[:space:]]*\\("),
+    ["*.ts", "*.tsx", "*.js", "*.jsx", "*.py"],
+    opts.signal,
+  );
+  const self = join(opts.repoPath, opts.path);
+  return hits
+    .filter((h) => h.file !== self && !/^\s*(import|from)\b/.test(h.text))
+    .map((h) => ({
+      path: rel(opts.repoPath, h.file),
+      line: h.line,
+      test: isTestPath(h.file),
+    }));
+}
+
+/** A real call in ordinary source: the arguments production actually passes. */
+async function sampleFromCallSites(
+  repoPath: string,
+  srcPath: string,
+  fnName: string,
+  snippets: Map<string, string>,
+  signal?: AbortSignal,
+): Promise<{ args: unknown[]; hit: GrepHit } | undefined> {
+  const hits = await grep(
+    repoPath,
+    wordPattern(fnName, "[[:space:]]*\\("),
+    ["*.ts", "*.tsx", "*.js", "*.jsx"],
+    signal,
+  );
+  const usable = hits.filter(
+    (h) => !isTestPath(h.file) && !h.file.endsWith(join(repoPath, srcPath)),
+  );
+  for (const hit of usable.slice(0, 20)) {
+    const block = await snippet(hit.file, hit.line, snippets);
+    const args = callArgs(block, fnName);
+    if (!args) continue;
+    const values = args.map(evalLiteral);
+    if (values.length === 0) continue;
+    if (values.every((v) => v === undefined)) continue;
+    return { args: values, hit };
+  }
+  return undefined;
+}
+
+/** Every top-level argument of the first call to `name`, as source text. */
+function callArgs(src: string, name: string): string[] | undefined {
+  const idx = src.search(new RegExp(`\\b${escapeRe(name)}\\s*\\(`));
+  if (idx < 0) return undefined;
+  const open = src.indexOf("(", idx);
+  if (open < 0) return undefined;
+  const body = balanced(src, open, "(", ")");
+  if (body === undefined || !body.trim()) return undefined;
+  return splitTopLevel(body).map((part) => part.trim());
+}
+
+/**
+ * Not `shapes.splitTop`: that counts angle brackets as depth for generics,
+ * which would swallow a comparison in a call argument.
+ */
+function splitTopLevel(src: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let quote: string | null = null;
+  let start = 0;
+  for (let i = 0; i < src.length; i += 1) {
+    const ch = src[i];
+    if (quote) {
+      if (ch === "\\") i += 1;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === "`") {
+      quote = ch;
+      continue;
+    }
+    if (ch === "{" || ch === "[" || ch === "(") depth += 1;
+    else if (ch === "}" || ch === "]" || ch === ")") depth -= 1;
+    else if (ch === "," && depth === 0) {
+      out.push(src.slice(start, i));
+      start = i + 1;
+    }
+  }
+  out.push(src.slice(start));
+  return out.filter((part) => part.trim() !== "");
+}
+
+/** Real values win; anything we could not read falls back to the shape. */
+function mergeArgs(found: unknown[], fallback: unknown[]): unknown[] {
+  const length = Math.max(found.length, fallback.length);
+  const out: unknown[] = [];
+  for (let i = 0; i < length; i += 1) {
+    out.push(found[i] !== undefined ? found[i] : fallback[i] ?? null);
+  }
+  return out;
+}
+
+/** "interface FollowsResponse and 1 primitive", for the note. */
+function describeShapes(params: string[], shaped: Shaped[]): string | undefined {
+  const known = shaped.filter((s) => s.known);
+  if (known.length === 0) return undefined;
+  const named = unique(
+    known
+      .map((s) => s.from)
+      .filter((from): from is string => Boolean(from) && /\s/.test(from ?? "")),
+  );
+  const rest = known.length - named.length;
+  const parts = [...named];
+  if (rest > 0) parts.push(`${rest} plain ${rest === 1 ? "type" : "types"}`);
+  const missing = params.length - known.length;
+  const tail = missing > 0 ? `, ${missing} left as a placeholder` : "";
+  return `${parts.join(", ")}${tail}`;
 }
 
 function typeNames(param: string): string[] {
@@ -193,7 +352,7 @@ async function findTestHits(
   needle: string,
   signal?: AbortSignal,
 ): Promise<GrepHit[]> {
-  const pattern = `\\b${escapeRe(needle)}\\b`;
+  const pattern = wordPattern(needle);
   const globHits = await grep(repoPath, pattern, TEST_GLOBS, signal);
   const scoped =
     globHits.length > 0
@@ -255,6 +414,15 @@ function exportName(line: string): string | undefined {
   return line.match(
     /export\s+(?:async\s+)?(?:function|const)\s+([A-Za-z_$][\w$]*)/,
   )?.[1];
+}
+
+/**
+ * git grep speaks POSIX ERE, which has no \\b. Word edges have to be spelled out
+ * as character classes or the pattern silently matches nothing.
+ */
+function wordPattern(needle: string, suffix = ""): string {
+  const edge = "[^A-Za-z0-9_$]";
+  return `(^|${edge})${escapeRe(needle)}${suffix || `(${edge}|$)`}`;
 }
 
 async function grep(
@@ -425,7 +593,7 @@ function objectAt(text: string, start: number): unknown {
   const ch = text[start];
   if (ch !== "{" && ch !== "[") return undefined;
   const close = ch === "{" ? "}" : "]";
-  const inner = takeBalanced(text, start, ch, close);
+  const inner = balanced(text, start, ch, close);
   if (inner === undefined) return undefined;
   if (/\.\.\./.test(inner)) return undefined;
   return evalLiteral(`${ch}${inner}${close}`);
@@ -436,63 +604,22 @@ function firstArg(src: string, name: string): string | undefined {
   if (idx < 0) return undefined;
   const open = src.indexOf("(", idx);
   if (open < 0) return undefined;
-  const inner = takeBalanced(src, open, "(", ")");
+  const inner = balanced(src, open, "(", ")");
   if (inner === undefined) return undefined;
   const trimmed = inner.trim();
   if (!trimmed) return undefined;
   if (trimmed.startsWith("{")) {
     const start = src.indexOf("{", open);
-    const obj = start >= 0 ? takeBalanced(src, start, "{", "}") : undefined;
+    const obj = start >= 0 ? balanced(src, start, "{", "}") : undefined;
     return obj !== undefined ? `{${obj}}` : undefined;
   }
   if (trimmed.startsWith("[")) {
     const start = src.indexOf("[", open);
-    const arr = start >= 0 ? takeBalanced(src, start, "[", "]") : undefined;
+    const arr = start >= 0 ? balanced(src, start, "[", "]") : undefined;
     return arr !== undefined ? `[${arr}]` : undefined;
   }
   const token = trimmed.split(",")[0]?.trim();
   return token || undefined;
-}
-
-function takeBalanced(
-  src: string,
-  openIdx: number,
-  openCh: string,
-  closeCh: string,
-): string | undefined {
-  if (src[openIdx] !== openCh) return undefined;
-  let depth = 0;
-  let quote: string | null = null;
-  for (let i = openIdx; i < src.length; i += 1) {
-    const ch = src[i];
-    if (quote) {
-      if (ch === "\\") {
-        i += 1;
-        continue;
-      }
-      if (ch === quote) quote = null;
-      continue;
-    }
-    if (ch === "'" || ch === '"' || ch === "`") {
-      quote = ch;
-      continue;
-    }
-    if (ch === openCh) depth += 1;
-    else if (ch === closeCh) {
-      depth -= 1;
-      if (depth === 0) return src.slice(openIdx + 1, i);
-    }
-  }
-  return undefined;
-}
-
-function evalLiteral(src: string): unknown {
-  if (/=>|\bfunction\b|\bimport\b|\brequire\b/.test(src)) return undefined;
-  try {
-    return Function(`"use strict"; return (${src});`)();
-  } catch {
-    return undefined;
-  }
 }
 
 async function evalExport(
@@ -572,6 +699,3 @@ function unique(items: string[]): string[] {
   return [...new Set(items.filter(Boolean))];
 }
 
-function escapeRe(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}

@@ -1,7 +1,14 @@
+/**
+ * Standalone mirror of the function parser in `server/probe.ts`: the pane needs
+ * to find a function under the cursor without a round trip, and the web bundle
+ * cannot import server modules. Keep the two in step.
+ */
 import type { FnBlock } from "./types";
 
+// Header only: parameters can run over many lines, so they are read by
+// balancing the parentheses rather than matched here.
 const JS_FN =
-  /^(\s*)(export\s+default\s+|export\s+)?(async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)\s*\(([^)]*)\)/;
+  /^(\s*)(export\s+default\s+|export\s+)?(async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)\s*(?:<[^(]*>)?\s*\(/;
 const JS_ARROW =
   /^(\s*)(export\s+default\s+|export\s+)?(const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(async\s*)?\(/;
 const PY_DEF = /^(\s*)(async\s+)?def\s+([A-Za-z_][\w]*)\s*\(([^)]*)\)/;
@@ -75,11 +82,78 @@ function dummyFor(raw: string): unknown {
 }
 
 function parseParams(raw: string): string[] {
-  return raw
-    .split(",")
+  return splitParams(raw)
     .map((p) => p.trim())
     .filter((p) => p && p !== "this");
 }
+
+/** Parameter text between the balanced parentheses opening at the header. */
+function paramsAt(lines: string[], headerIdx: number, afterCol: number): string {
+  const src = lines
+    .slice(headerIdx, Math.min(lines.length, headerIdx + 40))
+    .join("\n");
+  const open = src.indexOf("(", Math.max(0, afterCol - 1));
+  if (open < 0) return "";
+  return balanced(src, open, "(", ")") ?? "";
+}
+
+function balanced(
+  src: string,
+  openIdx: number,
+  openCh: string,
+  closeCh: string,
+): string | undefined {
+  if (src[openIdx] !== openCh) return undefined;
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = openIdx; i < src.length; i += 1) {
+    const ch = src[i];
+    if (quote) {
+      if (ch === "\\") i += 1;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === "`") {
+      quote = ch;
+      continue;
+    }
+    if (ch === openCh) depth += 1;
+    else if (ch === closeCh) {
+      depth -= 1;
+      if (depth === 0) return src.slice(openIdx + 1, i);
+    }
+  }
+  return undefined;
+}
+
+/** Commas inside an object type or default value do not start a parameter. */
+function splitParams(raw: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let quote: string | null = null;
+  let start = 0;
+  for (let i = 0; i < raw.length; i += 1) {
+    const ch = raw[i];
+    if (quote) {
+      if (ch === "\\") i += 1;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === "`") {
+      quote = ch;
+      continue;
+    }
+    if (ch === "{" || ch === "[" || ch === "(" || ch === "<") depth += 1;
+    else if (ch === "}" || ch === "]" || ch === ")" || ch === ">") depth -= 1;
+    else if (ch === "," && depth === 0) {
+      out.push(raw.slice(start, i));
+      start = i + 1;
+    }
+  }
+  out.push(raw.slice(start));
+  return out;
+}
+
 
 function jsAt(
   lines: string[],
@@ -111,7 +185,7 @@ function jsAt(
   if (line < headerIdx + 1 || line > end) return undefined;
   const exported = Boolean(match[2]);
   const name = kind === "fn" ? match[4] : match[4];
-  const params = parseParams(kind === "fn" ? match[5] : arrowParams(lines, headerIdx));
+  const params = parseParams(paramsAt(lines, headerIdx, match[0].length));
   return {
     name,
     startLine: headerIdx + 1,
@@ -121,12 +195,6 @@ function jsAt(
     params,
     header: lines[headerIdx].trim(),
   };
-}
-
-function arrowParams(lines: string[], headerIdx: number): string {
-  const slice = lines.slice(headerIdx, Math.min(lines.length, headerIdx + 8)).join(" ");
-  const m = slice.match(/=\s*(?:async\s*)?\(([^)]*)\)/);
-  return m?.[1] ?? "";
 }
 
 function jsEnd(lines: string[], headerIdx: number): number {

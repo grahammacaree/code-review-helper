@@ -7,12 +7,16 @@ import type {
   FnBlock,
   LookCloser,
   Overview,
+  FunctionBrief,
   ProbeArgSuggestion,
   ProbeResult,
 } from "../types";
 import { DiffPane } from "./DiffPane";
 import { FilePane, defaultArgsJson } from "./FilePane";
+import { NoteThread } from "./NoteThread";
+import { Octicon, type OcticonName } from "./Octicon";
 import { RolePane } from "./RolePane";
+import { Sandbox } from "./Sandbox";
 import { WiringPane } from "./WiringPane";
 
 export type FileTab = "diff" | "file" | "role" | "wiring";
@@ -39,6 +43,10 @@ export function FileInspect({
   onCloseWalkNote,
   chaseCandidates,
   onChase,
+  openFn,
+  openFnPane,
+  onExplainFunction,
+  error,
 }: {
   card?: FileCard;
   fileText?: string;
@@ -61,7 +69,7 @@ export function FileInspect({
   }) => void;
   onReply: (id: string, text: string) => void;
   onResolve: (id: string) => void;
-  onProbe: (line: number, args: unknown[]) => void;
+  onProbe: (line: number, args: unknown[], source?: string) => void;
   onSuggestArgs: (
     line: number,
     signal?: AbortSignal,
@@ -70,6 +78,16 @@ export function FileInspect({
   onCloseWalkNote: () => void;
   chaseCandidates?: ChaseCandidate[];
   onChase?: (path: string) => void;
+  /** Opens the sandbox on load, for design mode. */
+  openFn?: FnBlock;
+  openFnPane?: "source" | "about";
+  onExplainFunction: (
+    line: number,
+    signal?: AbortSignal,
+    refresh?: boolean,
+  ) => Promise<FunctionBrief>;
+  /** Last request failure, so the sandbox can report it over the modal. */
+  error?: string | null;
 }) {
   const [sel, setSel] = useState<{
     startLine: number;
@@ -78,18 +96,32 @@ export function FileInspect({
   } | null>(null);
   const [kind, setKind] = useState<"question" | "comment">("question");
   const [draft, setDraft] = useState("");
-  const [fn, setFn] = useState<FnBlock | null>(null);
-  const [argsJson, setArgsJson] = useState("[]");
+  const [fn, setFn] = useState<FnBlock | null>(openFn ?? null);
+  const [argsJson, setArgsJson] = useState(
+    openFn ? defaultArgsJson(openFn) : "[]",
+  );
   const [sampleNote, setSampleNote] = useState<string | null>(null);
   const [sampleKind, setSampleKind] = useState<
     ProbeArgSuggestion["kind"] | "loading" | null
   >(null);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [notesHidden, setNotesHidden] = useState(false);
+  const [brief, setBrief] = useState<FunctionBrief | null>(null);
+  const [briefBusy, setBriefBusy] = useState(false);
+  const [briefError, setBriefError] = useState<string | null>(null);
+  // Per-thread open/closed overrides; the default comes from note status.
+  const [threadOpen, setThreadOpen] = useState<Record<string, boolean>>({});
   const sampleGen = useRef(0);
   const sampleAbort = useRef<AbortController | null>(null);
+  const briefGen = useRef(0);
+  const briefAbort = useRef<AbortController | null>(null);
+
+  // A new file clears the pane. Only a *change* of file, though: running this on
+  // mount would close a sandbox opened straight onto a function and throw away
+  // the brief that sandbox has just asked for.
+  const shownPath = useRef(card?.path);
 
   useEffect(() => {
+    if (shownPath.current === card?.path) return;
+    shownPath.current = card?.path;
     sampleAbort.current?.abort();
     sampleGen.current += 1;
     setSel(null);
@@ -97,21 +129,25 @@ export function FileInspect({
     setFn(null);
     setSampleNote(null);
     setSampleKind(null);
-    setOpenId(null);
-    setNotesHidden(false);
+    setThreadOpen({});
+    dropBrief();
   }, [card?.path]);
 
   const here = annotations.filter((a) => a.path === card?.path);
-  const openNote = here.find((a) => a.id === openId);
 
-  function showNote(id: string) {
-    setNotesHidden(false);
-    setOpenId(id);
-  }
-
-  function hideNotes() {
-    setOpenId(null);
-    setNotesHidden(true);
+  function thread(note: Annotation) {
+    return (
+      <NoteThread
+        note={note}
+        busy={busy}
+        open={threadOpen[note.id] ?? note.status === "open"}
+        onToggle={(next) =>
+          setThreadOpen((prev) => ({ ...prev, [note.id]: next }))
+        }
+        onReply={(text) => onReply(note.id, text)}
+        onResolve={() => onResolve(note.id)}
+      />
+    );
   }
 
   function dismissDraft() {
@@ -126,6 +162,39 @@ export function FileInspect({
     setFn(null);
     setSampleNote(null);
     setSampleKind(null);
+    dropBrief();
+  }
+
+  function dropBrief() {
+    briefAbort.current?.abort();
+    briefGen.current += 1;
+    setBrief(null);
+    setBriefBusy(false);
+    setBriefError(null);
+  }
+
+  /** One agent round trip, so it only runs when About is actually opened. */
+  function explain(line: number, refresh = false) {
+    const gen = ++briefGen.current;
+    briefAbort.current?.abort();
+    const ac = new AbortController();
+    briefAbort.current = ac;
+    setBriefBusy(true);
+    setBriefError(null);
+    void onExplainFunction(line, ac.signal, refresh)
+      .then((next) => {
+        if (briefGen.current !== gen) return;
+        setBrief(next);
+        setBriefBusy(false);
+      })
+      .catch((err: unknown) => {
+        if (briefGen.current !== gen) return;
+        if (err instanceof Error && err.name === "AbortError") return;
+        setBriefBusy(false);
+        setBriefError(
+          err instanceof Error ? err.message : "Could not explain this function.",
+        );
+      });
   }
 
   function sameFn(a: FnBlock, b: FnBlock): boolean {
@@ -147,62 +216,27 @@ export function FileInspect({
           {card ? <span className="kind-label">{card.kind}</span> : null}
         </h2>
         {card ? (
-        <div className="tabs" role="tablist" aria-label="File views">
-          <button
-            type="button"
-            role="tab"
-            id="tab-diff"
-            aria-controls="file-view-panel"
-            aria-selected={tab === "diff"}
-            className={tab === "diff" ? undefined : "secondary"}
-            onClick={() => onTab("diff")}
-          >
-            Diff
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="tab-file"
-            aria-controls="file-view-panel"
-            aria-selected={tab === "file"}
-            className={tab === "file" ? undefined : "secondary"}
-            onClick={() => onTab("file")}
-          >
-            File
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="tab-role"
-            aria-controls="file-view-panel"
-            aria-selected={tab === "role"}
-            className={tab === "role" ? undefined : "secondary"}
-            onClick={() => onTab("role")}
-          >
-            Role
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="tab-wiring"
-            aria-controls="file-view-panel"
-            aria-selected={tab === "wiring"}
-            className={tab === "wiring" ? undefined : "secondary"}
-            onClick={() => onTab("wiring")}
-          >
-            Wiring
-          </button>
-        </div>
-        ) : (
-          <button
-            type="button"
-            className="command-box-sizer secondary"
-            tabIndex={-1}
-            aria-hidden="true"
-          >
-            File
-          </button>
-        )}
+          <div className="tabs" role="tablist" aria-label="File views">
+            {tabsFor(card, diffText, fileWiring).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                id={`tab-${t.id}`}
+                aria-controls="file-view-panel"
+                aria-selected={tab === t.id}
+                className={tab === t.id ? "tab current" : "tab"}
+                onClick={() => onTab(t.id)}
+              >
+                <Octicon name={t.icon} />
+                <span>{t.label}</span>
+                {t.count !== undefined && (
+                  <span className="counter">{t.count}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </header>
       {card ? (
         <div
@@ -220,7 +254,12 @@ export function FileInspect({
           }
         >
           {tab === "diff" ? (
-            <DiffPane path={card.path} diff={diffText} />
+            <DiffPane
+              path={card.path}
+              diff={diffText}
+              annotations={here}
+              renderNote={thread}
+            />
           ) : tab === "role" ? (
             <RolePane card={card} overview={overview} />
           ) : tab === "wiring" ? (
@@ -264,6 +303,7 @@ export function FileInspect({
               const ac = new AbortController();
               sampleAbort.current = ac;
               setFn(next);
+              dropBrief();
               setArgsJson(defaultArgsJson(next));
               setSampleKind("loading");
               setSampleNote(
@@ -287,7 +327,17 @@ export function FileInspect({
                   );
                 });
             }}
-            onOpenAnnotation={showNote}
+            renderNote={thread}
+            busy={busy}
+            onAskSpot={(spot, body) =>
+              onAnnotate({
+                kind: "question",
+                startLine: spot.startLine,
+                endLine: spot.endLine,
+                selectedText: "",
+                body,
+              })
+            }
             composerAfter={sel?.endLine}
             composer={
               sel ? (
@@ -358,198 +408,65 @@ export function FileInspect({
       ) : null}
 
       {fn && (
-        <form
-          className="probe-panel"
-          onSubmit={(e) => {
-            e.preventDefault();
-            let args: unknown[] = [];
-            try {
-              const parsed = JSON.parse(argsJson) as unknown;
-              args = Array.isArray(parsed) ? parsed : [parsed];
-            } catch {
-              return;
-            }
-            onProbe(fn.startLine, args);
-          }}
-        >
-          <h3>
-            Run <code>{fn.name}</code>
-            <span className="muted">
-              {" "}
-              L{fn.startLine}–L{fn.endLine}
-              {fn.exported ? "" : " · not exported — isolated eval"}
-            </span>
-          </h3>
-          <p className="muted">{fn.header}</p>
-          <label htmlFor="args">Arguments as JSON array</label>
-          {sampleNote && (
-            <p
-              className={
-                sampleKind === "placeholder"
-                  ? "status warn"
-                  : sampleKind === "loading"
-                    ? "muted"
-                    : "status ok"
-              }
-            >
-              {sampleNote}
-            </p>
-          )}
-          <textarea
-            id="args"
-            rows={sampleKind === "fixture" || sampleKind === "test" ? 10 : 4}
-            value={argsJson}
-            onChange={(e) => setArgsJson(e.target.value)}
-            disabled={busy}
-          />
-          <div className="row">
-            <button type="submit" disabled={busy}>
-              Run locally
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              onClick={closeProbe}
-            >
-              Close
-            </button>
-          </div>
-          {probe && probe.name === fn.name && (
-            <div className="probe-out">
-              {probe.error ? (
-                <p className="status error">{probe.error}</p>
-              ) : (
-                <pre className="code">{probe.result}</pre>
-              )}
-              {probe.stdout && <pre className="code muted">{probe.stdout}</pre>}
-            </div>
-          )}
-        </form>
+        <Sandbox
+          fn={fn}
+          path={card?.path ?? ""}
+          fileText={fileText}
+          probe={probe}
+          busy={busy}
+          argsJson={argsJson}
+          error={error}
+          sampleNote={sampleNote}
+          sampleKind={sampleKind}
+          brief={brief}
+          briefBusy={briefBusy}
+          briefError={briefError}
+          initialPane={openFnPane}
+          onExplain={(refresh) => explain(fn.startLine, refresh)}
+          onArgsJson={setArgsJson}
+          onRun={(args, source) => onProbe(fn.startLine, args, source)}
+          onClose={closeProbe}
+        />
       )}
 
-      {here.length > 0 && notesHidden && (
-        <div className="notes notes-collapsed">
-          <button
-            type="button"
-            className="secondary"
-            aria-expanded="false"
-            aria-controls="file-notes"
-            onClick={() => setNotesHidden(false)}
-          >
-            Show notes ({here.length})
-          </button>
-        </div>
-      )}
-
-      {here.length > 0 && !notesHidden && (
-        <div className="notes" id="file-notes">
-          <div className="notes-head">
-            <h3>Notes on this file</h3>
-            <button
-              type="button"
-              className="secondary"
-              aria-expanded="true"
-              aria-controls="file-notes"
-              onClick={hideNotes}
-            >
-              Hide
-            </button>
-          </div>
-          <ul>
-            {here.map((a) => (
-              <li key={a.id} className={a.status}>
-                <button
-                  type="button"
-                  className="hotspot"
-                  onClick={() => showNote(a.id)}
-                >
-                  {a.kind} L{a.startLine}–L{a.endLine}
-                  {a.status === "resolved" ? " · resolved" : ""}
-                </button>
-                {a.status === "open" && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => onResolve(a.id)}
-                  >
-                    Resolve
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {openNote && !notesHidden && (
-        <div className="note-thread" role="region" aria-label="Note thread">
-          <div className="notes-head">
-            <p>
-              <strong>{openNote.kind}</strong> L{openNote.startLine}–L
-              {openNote.endLine}
-            </p>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setOpenId(null)}
-            >
-              Close
-            </button>
-          </div>
-          <p>{openNote.body}</p>
-          {openNote.replies.map((r) => (
-            <p key={r.id} className="muted">
-              <strong>{r.role}:</strong> {r.text}
-            </p>
-          ))}
-          {openNote.status === "open" && (
-            <ReplyBox
-              disabled={busy}
-              onReply={(text) => onReply(openNote.id, text)}
-            />
-          )}
-        </div>
-      )}
     </section>
   );
+}
+
+/**
+ * Counters only where a real number exists — hunks in the diff, hotspots worth
+ * a look, wiring edges. Role has no countable contents, so it gets none.
+ */
+function tabsFor(
+  card: FileCard,
+  diffText?: string,
+  fileWiring?: FileWiring,
+): {
+  id: FileTab;
+  label: string;
+  icon: OcticonName;
+  count?: number;
+}[] {
+  const hunks = diffText?.match(/^@@/gm)?.length || undefined;
+  const edges =
+    (fileWiring &&
+      fileWiring.imports.length + fileWiring.exports.length) ||
+    undefined;
+  return [
+    { id: "diff", label: "Diff", icon: "file-diff", count: hunks },
+    {
+      id: "file",
+      label: "File",
+      icon: "file-code",
+      count: card.lookCloser.length || undefined,
+    },
+    { id: "role", label: "Role", icon: "book" },
+    { id: "wiring", label: "Wiring", icon: "plug", count: edges },
+  ];
 }
 
 function shortFilePath(path: string): string {
   const parts = path.split("/").filter(Boolean);
   if (parts.length <= 2) return path;
   return parts.slice(-2).join("/");
-}
-
-function ReplyBox({
-  disabled,
-  onReply,
-}: {
-  disabled: boolean;
-  onReply: (text: string) => void;
-}) {
-  const [text, setText] = useState("");
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!text.trim()) return;
-        onReply(text);
-        setText("");
-      }}
-    >
-      <textarea
-        rows={2}
-        value={text}
-        disabled={disabled}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Follow up"
-      />
-      <div className="row">
-        <button type="submit" disabled={disabled || !text.trim()}>
-          Reply
-        </button>
-      </div>
-    </form>
-  );
 }

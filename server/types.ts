@@ -79,6 +79,8 @@ export interface FileCard {
   what: string;
   why: string;
   roleInPr?: string;
+  /** Staff-level teaching beat on the system this hunk sits on. Not a gate. */
+  concept?: string;
   wiringNote?: string;
   links: string;
   lookCloser: LookCloser[];
@@ -145,14 +147,36 @@ export interface Annotation {
   at: number;
 }
 
+/**
+ * What a function does and why, for the sandbox's About tab. Facts are parsed
+ * from the checkout; the prose is the agent reading those facts plus the repo's
+ * concept and commentary notes.
+ */
+export interface FunctionBrief {
+  /** path:startLine, so a result cannot land in the wrong sandbox. */
+  id: string;
+  name: string;
+  what: string;
+  why: string;
+  /** The architectural system this function sits on, taught at his depth. */
+  concept?: string;
+  conceptName?: string;
+  /** One evidence-backed caution, when there is one worth having. */
+  watch?: string;
+  /** Parsed from the checkout: signature, doc comment, callers, imports used. */
+  facts: string[];
+}
+
 export interface ProbeArgSuggestion {
   args: unknown[];
   note: string;
   source?: string;
-  kind: "test" | "fixture" | "placeholder";
+  kind: "test" | "fixture" | "callsite" | "shape" | "placeholder";
 }
 
 export interface ProbeResult {
+  /** Identifies the run's target: path plus the function's line on disk. */
+  id: string;
   name: string;
   path: string;
   startLine: number;
@@ -162,6 +186,8 @@ export interface ProbeResult {
   params: string[];
   header: string;
   args?: unknown[];
+  /** The code that actually ran, edits included. */
+  source?: string;
   result?: string;
   stdout?: string;
   error?: string;

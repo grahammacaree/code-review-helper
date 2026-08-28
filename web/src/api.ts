@@ -1,4 +1,9 @@
-import type { AuthStatus, ProbeArgSuggestion, SessionSnapshot } from "./types";
+import type {
+  AuthStatus,
+  FunctionBrief,
+  ProbeArgSuggestion,
+  SessionSnapshot,
+} from "./types";
 
 async function parse<T>(res: Response): Promise<T> {
   const body = (await res.json()) as T & { error?: string };
@@ -8,8 +13,29 @@ async function parse<T>(res: Response): Promise<T> {
   return body;
 }
 
+/**
+ * A refused connection means the API is not up. Say so, rather than leaving the
+ * browser's "Failed to fetch" for the reviewer to decode.
+ */
+async function call<T>(
+  input: string,
+  init?: RequestInit,
+  parseAs: (res: Response) => Promise<T> = (res) => parse<T>(res),
+): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(input, init);
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new Error(
+      "Cannot reach the walkthrough API. Start it with `npm run dev`.",
+    );
+  }
+  return parseAs(res);
+}
+
 export function getAuth(): Promise<AuthStatus> {
-  return fetch("/api/auth").then((r) => parse<AuthStatus>(r));
+  return call<AuthStatus>("/api/auth");
 }
 
 export function createSession(
@@ -20,12 +46,12 @@ export function createSession(
   },
   signal?: AbortSignal,
 ): Promise<SessionSnapshot> {
-  return fetch("/api/sessions", {
+  return call<SessionSnapshot>("/api/sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
     signal,
-  }).then((r) => parse<SessionSnapshot>(r));
+  });
 }
 
 export function getSession(
@@ -33,9 +59,9 @@ export function getSession(
   opts?: { lite?: boolean; signal?: AbortSignal },
 ): Promise<SessionSnapshot> {
   const q = opts?.lite ? "?lite=1" : "";
-  return fetch(`/api/sessions/${id}${q}`, { signal: opts?.signal }).then((r) =>
-    parse<SessionSnapshot>(r),
-  );
+  return call<SessionSnapshot>(`/api/sessions/${id}${q}`, {
+    signal: opts?.signal,
+  });
 }
 
 function post(
@@ -44,12 +70,12 @@ function post(
   body?: unknown,
   signal?: AbortSignal,
 ): Promise<SessionSnapshot> {
-  return fetch(`/api/sessions/${id}/${path}`, {
+  return call<SessionSnapshot>(`/api/sessions/${id}/${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : "{}",
     signal,
-  }).then((r) => parse<SessionSnapshot>(r));
+  });
 }
 
 export const api = {
@@ -94,14 +120,29 @@ export const api = {
   ) => post(id, `annotations/${annotationId}/reply`, { text }, signal),
   resolveAnnotation: (id: string, annotationId: string) =>
     post(id, `annotations/${annotationId}/resolve`),
-  probe: (id: string, line: number, args: unknown[], signal?: AbortSignal) =>
-    post(id, "probe", { line, args }, signal),
+  probe: (
+    id: string,
+    line: number,
+    args: unknown[],
+    source?: string,
+    signal?: AbortSignal,
+  ) => post(id, "probe", { line, args, source }, signal),
   probeArgs: (
     id: string,
     line: number,
     signal?: AbortSignal,
   ): Promise<ProbeArgSuggestion> =>
-    fetch(`/api/sessions/${id}/probe-args?line=${line}`, { signal }).then((r) =>
-      parse<ProbeArgSuggestion>(r),
+    call<ProbeArgSuggestion>(`/api/sessions/${id}/probe-args?line=${line}`, {
+      signal,
+    }),
+  functionBrief: (
+    id: string,
+    line: number,
+    signal?: AbortSignal,
+    refresh?: boolean,
+  ): Promise<FunctionBrief> =>
+    call<FunctionBrief>(
+      `/api/sessions/${id}/function-brief?line=${line}${refresh ? "&refresh=1" : ""}`,
+      { signal },
     ),
 };

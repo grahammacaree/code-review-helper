@@ -7,6 +7,7 @@ import {
   createAnnotation,
   getSession,
   probeFunction,
+  explainFunction,
   suggestProbeArgs,
   quit,
   cancelWork,
@@ -251,14 +252,41 @@ app.get("/api/sessions/:id/probe-args", async (req, res) => {
   }
 });
 
+app.get("/api/sessions/:id/function-brief", async (req, res) => {
+  const ac = new AbortController();
+  const onClose = () => ac.abort();
+  req.on("close", onClose);
+  try {
+    const line = Number(req.query.line) || 1;
+    res.json(
+      await explainFunction(
+        sessionId(req),
+        line,
+        ac.signal,
+        req.query.refresh === "1",
+      ),
+    );
+  } catch (err) {
+    if (ac.signal.aborted) return;
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  } finally {
+    req.off("close", onClose);
+  }
+});
+
 app.post("/api/sessions/:id/probe", async (req, res) => {
   try {
-    const body = req.body as { line?: number; args?: unknown };
+    const body = req.body as {
+      line?: number;
+      args?: unknown;
+      source?: unknown;
+    };
     const args = Array.isArray(body.args) ? body.args : [];
     res.json(
       await probeFunction(sessionId(req), {
         line: Number(body.line) || 1,
         args,
+        source: typeof body.source === "string" ? body.source : undefined,
       }),
     );
   } catch (err) {

@@ -80,6 +80,8 @@ until then.
 
 **Role in PR:** [one short paragraph: this file’s purpose in the whole PR — stated + implicit motivation; not a repeat of What/Why]
 
+**Concept:** [optional, 2–4 sentences — the system this hunk sits on in this checkout (cache tier + what invalidates it, query-key boundary, shared-package contract, flag evaluation, device schema, native denial, job idempotency, migration order): the strategy here, what it buys, how it breaks. Pitch to the depth tag the host supplies for that system — scaffold: define it and gloss the jargon; build: skip the definition, add one new dimension; deepen: straight to the tradeoff and the easy miss. Omit unless the hunk is actually on that seam. Never a gate, never mention the tag.]
+
 **Wiring:**
 - **Into this file:** [{symbols} from `path/in/pr` or key package, …] or **none**
 - **Out of this file:** [{export} → `consumer/in/pr`, …] or **none**

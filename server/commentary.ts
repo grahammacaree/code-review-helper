@@ -66,6 +66,22 @@ export async function saveCommentary(opts: {
   await writeFile(repoPathFor(opts.key), clip(opts.repoMarkdown), "utf8");
 }
 
+/**
+ * Just the checkout map, for prompts that are about one piece of code rather
+ * than a card: the craft and best-practice notes only speak to card sections
+ * and teach-back, so sending them would be words the model cannot use.
+ */
+export function checkoutMapBlock(
+  bundle: CommentaryBundle | undefined,
+): string {
+  const map = bundle?.repoMarkdown.trim();
+  if (!map) return "";
+  return [
+    "Map of this checkout, written by earlier walks (private to the app, never in the reviewed tree). Use it for what matters here; do not quote it or treat it as a grade of the reviewer.",
+    `Checkout map:\n${clip(map, 4000)}`,
+  ].join("\n\n");
+}
+
 export function commentaryPromptBlock(
   bundle: CommentaryBundle | undefined,
 ): string {

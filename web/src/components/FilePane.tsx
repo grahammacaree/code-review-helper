@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { dummyArgs, functionsIn } from "../functionAtLine";
 import { Prose } from "../prose";
 import type { Annotation, FnBlock, LineRange, LookCloser, UhOh } from "../types";
+import { ThreadBox, ThreadReply } from "./NoteThread";
 
 export function FilePane({
   path,
@@ -14,12 +15,14 @@ export function FilePane({
   annotations,
   onSelect,
   onFunction,
-  onOpenAnnotation,
   onLookCloser,
   composer,
   composerAfter,
   walkNote,
   onCloseWalkNote,
+  renderNote,
+  onAskSpot,
+  busy,
 }: {
   path: string;
   kind: string;
@@ -35,12 +38,16 @@ export function FilePane({
     text: string;
   }) => void;
   onFunction: (fn: FnBlock) => void;
-  onOpenAnnotation: (id: string) => void;
   onLookCloser: (hotspot: LookCloser) => void;
   composer?: ReactNode;
   composerAfter?: number;
   walkNote?: LookCloser | null;
   onCloseWalkNote?: () => void;
+  /** Thread for a note, rendered under the last line it covers. */
+  renderNote?: (note: Annotation) => ReactNode;
+  /** A question typed into a hotspot thread, kept on that hotspot's range. */
+  onAskSpot?: (spot: LookCloser, text: string) => void;
+  busy?: boolean;
 }) {
   const target = useRef<HTMLSpanElement>(null);
   const pre = useRef<HTMLPreElement>(null);
@@ -72,7 +79,7 @@ export function FilePane({
     const lineNo = walkNote?.endLine ?? composerAfter;
     const line = host.querySelector(`[data-line="${lineNo}"]`);
     line?.scrollIntoView({ block: "nearest" });
-    host.querySelector(".composer, .walk-note")?.scrollIntoView({
+    host.querySelector(".composer, .note-thread.open")?.scrollIntoView({
       block: "nearest",
     });
   }, [composerAfter, walkNote?.endLine, walkNote?.why]);
@@ -106,9 +113,32 @@ export function FilePane({
     for (let n = u.startLine; n <= u.endLine; n += 1) uhLines.add(n);
   }
   const jump = focusLine ?? lookCloser[0]?.startLine ?? [...hits][0] ?? 1;
-  const openNotes = annotations.filter(
-    (a) => a.path === path && a.status === "open",
-  );
+  const here = annotations.filter((a) => a.path === path);
+  const openNotes = here.filter((a) => a.status === "open");
+  // Anchored to the last line the note covers, clamped so a note past the end
+  // of the file still has somewhere to sit.
+  const threads = new Map<number, Annotation[]>();
+  for (const a of here) {
+    const at = Math.min(Math.max(a.endLine, 1), lines.length);
+    threads.set(at, [...(threads.get(at) ?? []), a]);
+  }
+  // Hotspots read as threads too, anchored the same way, so the walk note the
+  // gutter icon opens is the box already sitting under the range.
+  const spots = new Map<number, Hotspot[]>();
+  for (const h of lookCloser) addSpot(spots, lines.length, h, "look");
+  for (const u of uhOh) {
+    addSpot(
+      spots,
+      lines.length,
+      {
+        name: "Uh oh",
+        startLine: u.startLine,
+        endLine: u.endLine,
+        why: u.text,
+      },
+      "uh",
+    );
+  }
 
   function lineOfNode(node: Node | null): number | undefined {
     let el: HTMLElement | null =
@@ -176,6 +206,29 @@ export function FilePane({
             <div key={n}>
               <div className={classes || undefined} data-line={n}>
                 <span className="ln">{n}</span>
+                {notes[0] && (
+                  <span
+                    className={header ? "note-mark shifted" : "note-mark"}
+                    aria-label={`${notes[0].kind} on this line`}
+                  >
+                    {notes[0].kind === "question" ? "?" : "·"}
+                  </span>
+                )}
+                {header && (
+                  <button
+                    type="button"
+                    className="run-mark"
+                    title={`Run ${header.name}`}
+                    aria-label={`Run ${header.name}`}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onFunction(header);
+                    }}
+                  >
+                    ▸
+                  </button>
+                )}
                 {(lookHere.length > 0 || uhHere.length > 0) && (
                   <span className="gutter-marks">
                     {lookHere.map((h) => (
@@ -224,55 +277,63 @@ export function FilePane({
                     if (header) onFunction(header);
                   }}
                 >
-                  {notes[0] && (
-                    <button
-                      type="button"
-                      className="note-mark"
-                      title={notes[0].body}
-                      aria-label={`${notes[0].kind} on this line`}
-                      onClick={() => onOpenAnnotation(notes[0].id)}
-                    >
-                      {notes[0].kind === "question" ? "?" : "·"}
-                    </button>
-                  )}
-                  {header && (
-                    <button
-                      type="button"
-                      className="run-mark"
-                      title={`Run ${header.name}`}
-                      aria-label={`Run ${header.name}`}
-                      onClick={() => onFunction(header)}
-                    >
-                      ▸
-                    </button>
-                  )}
                   {line || " "}
                 </span>
               </div>
-              {walkNote && n === walkNote.endLine ? (
-                <div
-                  className={`inline-composer walk-note${walkNote.name === "Uh oh" ? " uh" : " look"}`}
-                  onMouseUp={(e) => e.stopPropagation()}
-                >
-                  <p className="muted">
-                    {walkNote.name === "Uh oh" ? "Uh oh" : "Look closer"} L
-                    {walkNote.startLine}–L{walkNote.endLine}
-                  </p>
-                  {walkNote.name !== "Uh oh" && <h3>{walkNote.name}</h3>}
-                  <Prose text={walkNote.why} />
-                  {onCloseWalkNote && (
-                    <div className="row">
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={onCloseWalkNote}
-                      >
-                        Close
-                      </button>
+              {spots.get(n)?.map(({ spot, tone }) => {
+                const isOpen = Boolean(walkNote && sameSpot(walkNote, spot));
+                return (
+                  <div
+                    key={`${tone}-${spot.startLine}-${spot.name}`}
+                    className="inline-composer inline-thread"
+                    onMouseUp={(e) => e.stopPropagation()}
+                  >
+                    <ThreadBox
+                      tone={tone}
+                      label={`${tone === "uh" ? "Uh oh" : "Look closer"} on ${range(spot)}`}
+                      open={isOpen}
+                      peek={tone === "uh" ? spot.why : spot.name}
+                      onToggle={() => {
+                        if (isOpen) onCloseWalkNote?.();
+                        else onLookCloser(spot);
+                      }}
+                    >
+                      {tone === "look" && <h3>{spot.name}</h3>}
+                      <Prose text={spot.why} />
+                      {onAskSpot && (
+                        <ThreadReply
+                          disabled={Boolean(busy)}
+                          placeholder="Ask about this"
+                          submitLabel="Ask"
+                          onSubmit={(text) => onAskSpot(spot, text)}
+                          actions={
+                            onCloseWalkNote && (
+                              <button
+                                type="button"
+                                className="secondary"
+                                onClick={onCloseWalkNote}
+                              >
+                                Got it
+                              </button>
+                            )
+                          }
+                        />
+                      )}
+                    </ThreadBox>
+                  </div>
+                );
+              })}
+              {renderNote
+                ? threads.get(n)?.map((a) => (
+                    <div
+                      key={a.id}
+                      className="inline-composer inline-thread"
+                      onMouseUp={(e) => e.stopPropagation()}
+                    >
+                      {renderNote(a)}
                     </div>
-                  )}
-                </div>
-              ) : null}
+                  ))
+                : null}
               {composer && n === composerAfter ? (
                 <div
                   className="inline-composer"
@@ -300,6 +361,33 @@ export function FilePane({
         </button>
       )}
     </div>
+  );
+}
+
+interface Hotspot {
+  spot: LookCloser;
+  tone: "look" | "uh";
+}
+
+function addSpot(
+  spots: Map<number, Hotspot[]>,
+  lineCount: number,
+  spot: LookCloser,
+  tone: "look" | "uh",
+): void {
+  const at = Math.min(Math.max(spot.endLine, 1), lineCount);
+  spots.set(at, [...(spots.get(at) ?? []), { spot, tone }]);
+}
+
+function range(spot: LookCloser): string {
+  return spot.startLine === spot.endLine
+    ? `L${spot.startLine}`
+    : `L${spot.startLine}–L${spot.endLine}`;
+}
+
+function sameSpot(a: LookCloser, b: LookCloser): boolean {
+  return (
+    a.startLine === b.startLine && a.endLine === b.endLine && a.why === b.why
   );
 }
 

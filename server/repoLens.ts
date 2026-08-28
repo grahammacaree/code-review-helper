@@ -84,12 +84,12 @@ export async function loadRepoLens(
   };
 }
 
-interface Manifest {
+export interface Manifest {
   rel: string;
   deps: string[];
 }
 
-async function collectManifests(
+export async function collectManifests(
   repoPath: string,
   changedPaths: string[],
 ): Promise<Manifest[]> {

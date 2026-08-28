@@ -68,17 +68,17 @@ export function RepoMap({
     <section className="repo-map" aria-label="Changed files">
       {howItConnects ? (
         <div className="map-blurb">
-          <h2>How it connects</h2>
+          <h2 className="main-head">How it connects</h2>
           <Prose text={howItConnects} />
           {browseable ? (
-            <p className="muted map-browse-hint">
+            <p className="muted">
               Click a file to open it while you summarise.
             </p>
           ) : null}
         </div>
       ) : (
         <div className="map-blurb">
-          <h2>Changed files</h2>
+          <h2 className="main-head">Changed files</h2>
           {tree.length === 0 && (
             <p className="muted">Checkout a PR to see the tree.</p>
           )}

@@ -7,6 +7,8 @@
     "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "tsx watch server/index.ts",
     "dev:web": "vite",
+    "design": "VITE_DESIGN=1 vite --open \"/?design\"",
+    "design:check": "tsx --tsconfig tsconfig.web.json web/src/design/smoke.tsx",
     "build": "tsc -p tsconfig.server.json && vite build",
     "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.web.json --noEmit"
   },

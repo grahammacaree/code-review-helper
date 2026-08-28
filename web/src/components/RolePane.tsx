@@ -29,6 +29,12 @@ export function RolePane({
           <Prose text={roleText} />
         </>
       )}
+      {card.concept && (
+        <>
+          <h3>Concept</h3>
+          <Prose text={card.concept} />
+        </>
+      )}
       {card.map && (
         <>
           <h3>How it connects</h3>

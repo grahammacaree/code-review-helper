@@ -2,14 +2,17 @@ import { Agent, Cursor, CursorAgentError } from "@cursor/sdk";
 import { cursorApiKey, cursorModel } from "./env.js";
 import { fileDiff, githubDiffUrl, parseFocusFromDiff, readWorktreeFile } from "./git.js";
 import { fileLinks, isTestPath } from "./scaffold.js";
+import type { ConceptDepth, ConceptForCard } from "./conceptMemory.js";
 import type {
   FileCard,
   FileEntry,
+  FunctionBrief,
   Overview,
   TeachbackKind,
   TeachbackResult,
 } from "./types.js";
 import {
+  checkoutMapBlock,
   commentaryPromptBlock,
   emptyRepoTemplate,
   emptyUserTemplate,
@@ -168,6 +171,44 @@ export async function generateOverview(opts: {
   };
 }
 
+const DEPTH_RULE: Record<ConceptDepth, string> = {
+  scaffold:
+    "never taught to him in a walk yet — build from the ground up: name the system, say plainly what it does and why this repo has it, gloss any jargon you use, and give one concrete consequence in this diff. Do not assume he knows the vocabulary. No sharp-edge trivia yet",
+  build:
+    "taught before — skip the definition, connect to what he already knows, and add exactly one new dimension he has not been shown (a second failure mode, the write/invalidation side, where the boundary actually sits)",
+  deepen:
+    "well covered and he has engaged with it — go to the sharp edges a staff engineer would argue about: which tradeoff this repo chose and what it costs, the failure that is easy to miss, how this instance differs from the textbook. Do not re-explain the basics",
+};
+
+/**
+ * Staff-engineer teaching beat: explain the system this hunk sits on so the
+ * reviewer learns the repo's strategy, not just the diff. Depth comes from what
+ * earlier walks already taught him. Never a gate.
+ */
+function conceptBlock(concepts?: ConceptForCard[]): string {
+  if (!concepts?.length) {
+    return "concept: omit unless this hunk genuinely sits on a named architectural system in this repo. Do not invent one.";
+  }
+  const named = concepts
+    .map((c) =>
+      [
+        `${c.name} [${c.depth}] — ${DEPTH_RULE[c.depth]}.`,
+        c.seenIn.length
+          ? `Already came up in: ${c.seenIn.join(", ")}.`
+          : "First checkout where it has come up.",
+        `Reference framing: ${c.teach}`,
+      ].join(" "),
+    )
+    .join("\n");
+  return [
+    "concept: teach the system this hunk sits on, staff-engineer style — 2–4 sentences, in the specific terms of THIS repo and THIS hunk.",
+    "Lead with the system name. Say what the strategy is here, what the tradeoff is, and how it usually breaks — the thing a senior teammate already has in their head. Prefer evidence from the diff and the files walked so far over the generic framing.",
+    "Pitch it at the depth tag below: that tag is what he has already been taught across walks, so scaffold means start from scratch and deepen means skip the primer. Never say the tag, the counts, or that you are tracking him.",
+    "Omit concept when the hunk only brushes the system (imports, formatting, expected-string test churn) or when you would just be restating the framing. Never repeat what/why/roleInPr, never turn it into a checklist, and never make it something they must recite.",
+    `Systems detected in this checkout that this path touches:\n${named}`,
+  ].join(" \n");
+}
+
 export async function generateFileCard(opts: {
   agent: LocalAgent;
   cwd: string;
@@ -180,6 +221,7 @@ export async function generateFileCard(opts: {
   prUrl?: string;
   overview?: Overview;
   commentary?: CommentaryBundle;
+  concepts?: ConceptForCard[];
 }): Promise<FileCard> {
   const hunks = await fileDiff(opts.cwd, opts.baseRef, opts.entry.path, {
     context: 0,
@@ -197,7 +239,14 @@ export async function generateFileCard(opts: {
   const holder: {
     prose?: Pick<
       FileCard,
-      "what" | "why" | "roleInPr" | "lookCloser" | "map" | "couldHave" | "uhOh"
+      | "what"
+      | "why"
+      | "roleInPr"
+      | "concept"
+      | "lookCloser"
+      | "map"
+      | "couldHave"
+      | "uhOh"
     >;
   } = {};
 
@@ -219,6 +268,7 @@ export async function generateFileCard(opts: {
       "Call publish_file_card once. Stay on this file.",
       "what: concrete change. why: why this file had to change.",
       "roleInPr: one short paragraph on this file's purpose relative to the PR's stated and implicit motivation — not a repeat of what/why.",
+      conceptBlock(opts.concepts),
       "lookCloser: 0–3 named hotspots (complex/novel/central) with line ranges. Behavior pivots: if the hunk is tiny but the point is a semantic choice (wrong flag/signal would regress UX), put that symbol in lookCloser and phrase why with the wrong alternative (e.g. 'vs isFetching — pagination would flash RefreshControl') — do not leave lookCloser empty on those files.",
       "map: optional. In-file: how lookCloser pieces connect when interlocking. Sibling: when this file and another queued/covered path solve the same UX differently, 2–4 lines naming the sibling and the divergence. Omit when not useful. Styles/barrels: prefer roleInPr over inventing a layout map.",
       "couldHave: 0–2 evidenced design forks, or empty.",
@@ -246,6 +296,7 @@ export async function generateFileCard(opts: {
                 what: { type: "string" },
                 why: { type: "string" },
                 roleInPr: { type: "string" },
+                concept: { type: "string" },
                 lookCloser: {
                   type: "array",
                   items: {
@@ -292,6 +343,7 @@ export async function generateFileCard(opts: {
                 what: String(args.what),
                 why: String(args.why),
                 roleInPr: args.roleInPr ? String(args.roleInPr) : undefined,
+                concept: args.concept ? String(args.concept) : undefined,
                 lookCloser,
                 map: args.map ? String(args.map) : undefined,
                 couldHave: Array.isArray(args.couldHave)
@@ -513,6 +565,7 @@ export async function gradeTeachback(opts: {
             "Scale to file role: styles/barrels = intent, not every key. Tests = what they guard and why, not Redis/TTL/off-by-one internals unless this file's Look closer named that as a behavior pivot. If the hunk is only a renamed expectation string they already explained on config/bootstrap, pass a one-liner — do not stay for a distinct contract. If they asked to skip remaining string-only / same-rename tests, that is a skip, not thin.",
             "Shared gates/screens: what + why (+ roughly who consumes / which signal) is enough.",
             "Stay messages: one missing high-level piece. Do not dump a checklist of five omissions.",
+            "The card's Concept beat is teaching, not a requirement: never grade thin for skipping the system framing, and never quiz cache keys, TTLs, or migration order they were told rather than asked. If they do engage the concept, credit it as a plus and build on it in one sentence.",
             pivotHint
               ? `Behavior pivot Look closer on THIS file — ${pivotHint}. If their paraphrase never engages that semantic choice (or the wrong alternative), and they have not already explained it upstream, grade thin.`
               : "Do not fail them for skipping Look closer names when the overall explanation is solid.",
@@ -680,6 +733,102 @@ export async function answerAnnotation(opts: {
   return holder.value;
 }
 
+/**
+ * Explains one function for the sandbox: what it does, why it exists, and the
+ * repo system it sits on. Reads the function as it stands, not as a diff — the
+ * reviewer may be here to understand code the PR never touched.
+ */
+export async function explainFunction(opts: {
+  agent: LocalAgent;
+  path: string;
+  name: string;
+  source: string;
+  facts: string[];
+  card?: FileCard;
+  concepts?: ConceptForCard[];
+  commentary?: CommentaryBundle;
+}): Promise<Pick<FunctionBrief, "what" | "why" | "concept" | "watch">> {
+  const holder: {
+    prose?: Pick<FunctionBrief, "what" | "why" | "concept" | "watch">;
+  } = {};
+  const run = await opts.agent.send(
+    [
+      REVIEW_QA_RULES,
+      `Explain ${opts.name}() in ${opts.path} for the reviewer's sandbox. Call publish_function_brief once.`,
+      "what: 2–4 sentences on what this function actually does — the path through it, what it returns, what it does to its inputs. Name the real identifiers. Do not narrate line by line.",
+      "why: 2–3 sentences on why it exists and who needs it: the job it holds in this file and in the PR, using the callers listed in the facts. If the facts say nothing calls it in the checkout, say that plainly rather than guessing.",
+      conceptBriefBlock(opts.concepts),
+      "watch: optional single sentence on the thing most likely to bite when he edits this in the sandbox (an input it does not defend against, a side effect, an assumption about call order). Evidence from the source only — omit rather than invent.",
+      "Facts parsed from the checkout — trust these over guessing, and do not repeat them verbatim:",
+      opts.facts.map((f) => `- ${f}`).join("\n") || "- (none)",
+      opts.card
+        ? `This file's card — do not just restate it:\nWhat: ${opts.card.what}\nWhy: ${opts.card.why}`
+        : "",
+      checkoutMapBlock(opts.commentary),
+      `Function as it stands:\n${opts.source.slice(0, AGENT_BODY_CHARS)}`,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+    {
+      local: {
+        customTools: {
+          publish_function_brief: {
+            description: "Publish the function explanation. Call once.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                what: { type: "string" },
+                why: { type: "string" },
+                concept: { type: "string" },
+                watch: { type: "string" },
+              },
+              required: ["what", "why"],
+            },
+            execute: (args) => {
+              holder.prose = {
+                what: String(args.what),
+                why: String(args.why),
+                concept: args.concept ? String(args.concept) : undefined,
+                watch: args.watch ? String(args.watch) : undefined,
+              };
+              return "Brief recorded. Stop.";
+            },
+          },
+        },
+      },
+    },
+  );
+  const result = await waitRun(run);
+  if (!holder.prose) {
+    throw new Error(missingTool("publish_function_brief", result));
+  }
+  return holder.prose;
+}
+
+/** The teaching beat, aimed at one function rather than a hunk. */
+function conceptBriefBlock(concepts?: ConceptForCard[]): string {
+  if (!concepts?.length) {
+    return "concept: omit unless this function genuinely sits on a named architectural system in this repo. Do not invent one.";
+  }
+  const named = concepts
+    .map((c) =>
+      [
+        `${c.name} [${c.depth}] — ${DEPTH_RULE[c.depth]}.`,
+        c.seenIn.length
+          ? `Already came up in: ${c.seenIn.join(", ")}.`
+          : "First checkout where it has come up.",
+        `Reference framing: ${c.teach}`,
+      ].join(" "),
+    )
+    .join("\n");
+  return [
+    "concept: 2–4 sentences on the system this function participates in, in the terms of THIS repo and THIS function. Lead with the system name, say what the strategy is here and what it costs, and tie it to a specific thing in the source above.",
+    "Pitch it at the depth tag below — that is what earlier walks already taught him. Never say the tag or that you are tracking him.",
+    "Omit concept when the function only brushes the system, or when you would just restate the framing.",
+    `Systems detected in this checkout that this path touches:\n${named}`,
+  ].join("\n");
+}
+
 export async function updateWalkCommentary(opts: {
   agent: LocalAgent;
   bundle: CommentaryBundle;
@@ -703,6 +852,7 @@ export async function updateWalkCommentary(opts: {
       "user.md Working on: same abstraction — a habit to tighten, not a recap of this walk. If this walk showed the gap, keep it and set (quiet: 0). If it did not show, increment (quiet: N). After quiet: 2, move the bullet to Do not hammer. If it is already in Do not hammer and still quiet, drop it. If a cooled gap shows again, put it back in Working on at (quiet: 0). Never grow Working on from vibes. Strengths (Patterns worth keeping) may stay without fresh proof.",
       "repos/*.md is a living map of this checkout (codebase). Walks expand that map; they are not objects to keep. Write about the code, not the reviewer. Do not grade teach-back. Do not keep a Walks / PR changelog section. Snapshot may note last walk for recency only.",
       "Merge with prior notes: keep what still looks true, drop what this walk disproved, add at most a few new bullets. Keep each file under ~150 lines. No secrets, tokens, or pasted source.",
+      "repos/*.md should name the architectural systems this checkout actually runs on (caching tiers and what invalidates them, flags, package boundaries, offline/native seams) under What matters here — the things a staff engineer would brief a new teammate on. Detected system names in the evidence are a starting point, not gospel: keep the ones this walk gave evidence for.",
       "repo.md shape (headings verbatim): Snapshot; What matters here; Watch next. What matters: how the system works — packages, opt-in vs global, where code runs (GSSP vs Edge vs client), fail-open vs fail-closed, what tests actually prove. Merge this walk’s facts into those bullets; drop what this walk disproved. Cap ~20 bullets; group if useful. Watch next: when a future PR touches X, look at Y. If the prior file has Walks / Still thin / Nudges / What you've picked up, fold codebase facts into What matters / Watch next and delete those sections.",
       "Call publish_commentary once with the full replacement markdown for both files.",
       `Prior user.md:\n${priorUser}`,
