@@ -59,7 +59,7 @@ Uh ohs are not a bot review. They are “look at this if you are going to thumbs
 
 **It teaches the systems, not just the diff.** The walk detects which architectural systems this checkout actually runs on — shared cache tier, CDN/surrogate ownership, server render cache, client query keys, feature flags, shared-package contracts, device storage, native permissions, job idempotency, migrations, error-reporting ownership — and when a hunk lands on one of those seams the card adds a short **Concept** beat: what the strategy is *here*, what it buys, and how it usually breaks. That is the context a staff engineer already carries; reviewing a Duet PR should leave you knowing how Duet caches, and a mobile PR should leave you knowing what happens when the OS says no. It is teaching, so it is never a teach-back gate and never appears on files that only brush the system.
 
-**And the teaching adapts to you.** Each system is tracked against your profile — how many walks have taught it, and whether you engaged it in your own words rather than just reading it. The first time a system comes up the card scaffolds from scratch and glosses the vocabulary; once you have it, the card skips the primer and adds a dimension you have not been shown; once you are fluent it goes straight to the tradeoff this repo chose and what it costs. A system you have not seen in months steps back down a level, so stale knowledge gets re-grounded instead of assumed. The ledger lives in `data/commentary/concepts.json` (private, gitignored, alongside your craft notes), and the walk never mentions it — it changes the pitch, not the conversation.
+**And the teaching adapts to you.** How deep that Concept beat goes depends on what earlier walks already taught you and what you engaged with in your own words — see [What it remembers](#what-it-remembers).
 
 ## Requirements
 
@@ -122,42 +122,40 @@ Wait until the terminal shows the walkthrough API on port 8787. Vite can proxy `
 - UI: [http://127.0.0.1:5173](http://127.0.0.1:5173)
 - API: [http://127.0.0.1:8787](http://127.0.0.1:8787)
 
-### Design mode
-
-To look at the UI itself — spacing, density, wrapping, the states you only hit once per walk — you do not need a PR, an agent, or an API key:
-
-```bash
-npm run design          # opens http://127.0.0.1:5173/?design (sets VITE_DESIGN=1)
-npm run design:check    # headless: renders every state, fails if one breaks
-```
-
-Design mode renders the **real** walk surface (`WalkView`, the same component the app mounts) against fixtures, with the actions inert — so the design you review is the design you get, not a mock that drifts.
-
-The fixture repo is **invented**: `northwind/atlas`, a multi-network publishing monorepo whose networks share `packages/atlas-framework`, with a third-party reader-profile service called Starling. It is shaped like a real review (shared package plus two call sites, a fail-open bugfix, its tests, an asset) so every pane has something honest to render — and because none of it comes from anyone's codebase, **screenshots from design mode are safe to publish**. Screenshot from here rather than from a live walk.
-
-The app fills the window exactly as it normally does; the state picker is a floating **+** in the bottom-right corner that opens a dropdown, so it never takes layout space from what you are reviewing. `[` and `]` step through states without opening it. States: empty, missing key, dirty tree, large PR, overview, each of the four file panes, a concept beat on a shared-package change, a thin teach-back, inline comment threads with a probe result, the function sandbox, a chase card, working, error, wrap-up, done. The sandbox appears twice: once on its editor and once on the About tab.
-
-Design mode is on when either the `?design` query or `VITE_DESIGN` is present, so losing the query on a reload cannot silently boot the real app against a server you have not started.
-
-Fixtures live in `web/src/design/fixtures.ts`; add a scenario there when you add a state. Each carries a note on what to look at, which `npm run design:check` prints (rather than the UI, which stays uncluttered).
-
 In the form: path to the **other** repo (the PR’s clone), plus a PR URL or number. The app checks out the PR tip there (clean tree first). Explain files in the box; **Ask** vs teach-back is a mode switch. **Skip remaining tests** drops leftover test/spec files when the rest of the queue is bookkeeping. **New walkthrough** starts a new session.
 
 If the API key is missing, `/api/auth` reports it and cards will not generate. If checkout fails, `gh` is usually not installed or not logged in. Do not expose 5173/8787 off localhost (see Data and security).
 
 Walks persist across refresh and server restart (`data/sessions/`, gitignored; the browser remembers the session id). **New walkthrough** starts a new session; it does not wipe commentary.
 
-After a walk, the app rewrites **private notes** under `data/commentary/` in *this* project (never the tree you are reviewing, not part of the skill):
+Each file card includes **Role in PR** (agent) and **Wiring** (parsed imports/exports among queued and covered files — “no importers in walk scope” means none *in this walk*, not unused in the product); the right column exposes the same as **Role** and **Wiring** tabs beside **File** and **Diff**. If an unchanged file still imports a changed export, Wiring (and a chip) can **Chase** it: up to three thin cards inserted after the current file (finish this file first), no chase-on-chase, skip / done looking instead of teach-back. Checkout is what lets you click through to those callers. At wrap-up (and when done), the last file stays open and you can **click files in the map** to reopen Diff / File / Role / Wiring while writing the summary. **Copy review notes** puts lingering uh-ohs, design forks, and your inline questions/comments on the clipboard as Markdown for pasting into a GitHub review.
+
+### Design mode
+
+`npm run design` opens every UI state on fixtures — no PR, agent, or API key — and `npm run design:check` renders them all headlessly so a broken state fails loudly. It mounts the same `WalkView` the app does, so the design you review is the design you get; the fixture repo is invented, which is why screenshots taken here are safe to publish. Add a state in `web/src/design/fixtures.ts`.
+
+## Function sandbox
+
+Reading a function tells you what it is supposed to do. Running it tells you what it does — which is the difference between believing a reviewer's explanation of a boolean and watching the boolean come back false.
+
+Clicking the ▸ beside a function header in the app opens the sandbox, a near-fullscreen modal where both the function and its arguments are editable: Run (or ⌘/Ctrl+Enter) executes what is on screen. An edited function runs from a scratch copy of the whole file written beside the original — so its imports still resolve — and that copy is always deleted afterwards; your working tree is never modified.
+
+**Arguments are inferred, not demanded.** The box is filled by working down a ladder, and the note above it says which rung it landed on: a Jest/spec call, a typed fixture (`const foo: Type = { … }`) or fixture builder, a real call site in ordinary source, and finally the parameter types themselves — interfaces, type aliases, enums and inline object types are followed through relative imports and turned into objects with their required fields filled. Only when a type says nothing do you get a bare placeholder.
+
+**The About tab explains the function, not the diff:** what it does, why it exists and who calls it, the repo system it participates in (taught at the depth your earlier walks earned), and one caution about editing it — over a list of facts parsed from the checkout (signature, the comment above it, whether it is exported, the imports its body uses, every caller with test and changed-in-this-PR marked, and whether the PR touches its lines). It costs an agent round trip, so nothing is fetched until you open the tab, and the answer is cached per function; **Ask again** puts the question afresh rather than replaying the cache.
+
+## What it remembers
+
+A walk that starts from zero every time has to re-teach you things you already know, and cannot notice the ones you never picked up. So after a walk the app (not the skill) rewrites **private notes** under `data/commentary/` in *this* project — never the tree you are reviewing:
 
 - `user.md` — portable craft (how you review). Habits, not a walk log.
 - `repos/<origin>.md` — a living map of that checkout (how the system works, seams to look at). Each walk merges in; it is not a PR changelog.
 - `general.md` — best-practice commentary you write yourself. Walks do not overwrite it. Edit the file under `data/commentary/general.md`.
-- `concepts.json` — per-system exposure ledger (taught count, engaged count, last seen, which checkouts). Sets the depth of the **Concept** beat. Counts, not prose; safe to delete if you want to start teaching from scratch.
+- `concepts.json` — per-system exposure ledger (taught count, engaged count, last seen, which checkouts). Counts, not prose; safe to delete if you want to start teaching from scratch.
 
-Those files feed later **cards** (uh-ohs / Look closer). They are **not** shown on the opening overview. The **Repo** overview block is stack/docs Watch for (mobile vs website vs backend, `AGENTS.md` / contributing bullets), not private notes and not a detector of whether you already own the system.
+**The ledger sets the pitch of the teaching.** Each architectural system is tracked not just by how many walks have taught it, but by whether you engaged it in your own words rather than only reading it. The first time a system comes up the card scaffolds from scratch and glosses the vocabulary; once you have it, the card skips the primer and adds a dimension you have not been shown; once you are fluent it goes straight to the tradeoff this repo chose and what it costs. A system you have not seen in months steps back down a level, so stale knowledge gets re-grounded instead of assumed. The walk never mentions any of this — it changes the pitch, not the conversation.
 
-Clicking the ▸ beside a function header opens the **function sandbox**, a near-fullscreen modal where both the function and its arguments are editable: Run (or ⌘/Ctrl+Enter) executes what is on screen. An edited function runs from a scratch copy of the whole file written beside the original — so its imports still resolve — and that copy is always deleted afterwards; your working tree is never modified. The argument box is filled by working down a ladder, and the note above it says which rung it landed on: a Jest/spec call, a typed fixture (`const foo: Type = { … }`) or fixture builder, a real call site in ordinary source, and finally the parameter types themselves — interfaces, type aliases, enums and inline object types are followed through relative imports and turned into objects with their required fields filled. Only when a type says nothing do you get a bare placeholder. The modal's **About** tab explains the function rather than the diff: what it does, why it exists and who calls it, the repo system it participates in (taught at the depth your earlier walks earned), and one caution about editing it — over a list of facts parsed from the checkout (signature, the comment above it, whether it is exported, the imports its body uses, every caller with test and changed-in-this-PR marked, and whether the PR touches its lines). It costs an agent round trip, so nothing is fetched until you open the tab, and the answer is cached per function; **Ask again** puts the question afresh rather than replaying the cache. Each file card includes **Role in PR** (agent) and **Wiring** (parsed imports/exports among queued and covered files — “no importers in walk scope” means none *in this walk*, not unused in the product); the right column exposes the same as **Role** and **Wiring** tabs beside **File** and **Diff**. If an unchanged file still imports a changed export, Wiring (and a chip) can **Chase** it: up to three thin cards inserted after the current file (finish this file first), no chase-on-chase, skip / done looking instead of teach-back. Checkout is what lets you click through to those callers. At wrap-up (and when done), the last file stays open and you can **click files in the map** to reopen Diff / File / Role / Wiring while writing the summary. **Copy review notes** puts lingering uh-ohs, design forks, and your inline questions/comments on the clipboard as Markdown for pasting into a GitHub review.
-
+These files feed later **cards** (uh-ohs / Look closer) and are agent-only: none of it is shown on the opening overview. The **Repo** overview block is stack/docs Watch for (mobile vs website vs backend, `AGENTS.md` / contributing bullets), not private notes and not a detector of whether you already own the system.
 
 ## Data and security
 
