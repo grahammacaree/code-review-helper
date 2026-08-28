@@ -1,9 +1,16 @@
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { Sandbox } from "../components/Sandbox";
+import { functionAtLine } from "../functionAtLine";
 import { WalkView, type WalkActions } from "../components/WalkView";
 import type { FunctionBrief, ProbeArgSuggestion } from "../types";
-import { AUTH_MISSING, AUTH_OK, FIX_BRIEF, SCENARIOS } from "./fixtures";
+import {
+  AUTH_MISSING,
+  AUTH_OK,
+  FIX_BRIEF,
+  FIX_SAMPLES,
+  SCENARIOS,
+} from "./fixtures";
 
 /**
  * Headless check that every design-mode state still renders, and that the pane
@@ -211,6 +218,32 @@ for (const s of SCENARIOS) {
     // Prose, not code: the About pane must not inherit the editor's font.
     if (/class="code sandbox-about/.test(html)) {
       fail("sandbox-about", "About pane is styled as code");
+    }
+  }
+}
+
+// A sample argument is only useful if it fits the signature it is offered
+// under, so each one is checked against the parameters of the function actually
+// at that line.
+{
+  const text = SCENARIOS.find((s) => s.session?.fileText)?.session?.fileText;
+  const path = SCENARIOS.find((s) => s.session?.card)?.session?.card?.path;
+  if (!text || !path) {
+    fail("samples", "no scenario carries file text to check samples against");
+  } else {
+    for (const [line, sample] of Object.entries(FIX_SAMPLES)) {
+      const fn = functionAtLine(text, Number(line), path);
+      if (!fn) {
+        fail("samples", `no function at line ${line}`);
+        continue;
+      }
+      const params = fn.params.filter((p) => p !== "this");
+      if (sample.args.length !== params.length) {
+        fail(
+          "samples",
+          `${fn.name} takes (${params.join(", ")}) but its sample has ${sample.args.length} argument(s)`,
+        );
+      }
     }
   }
 }

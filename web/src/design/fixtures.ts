@@ -8,6 +8,7 @@ import type {
   FnBlock,
   FunctionBrief,
   Overview,
+  ProbeArgSuggestion,
   SessionSnapshot,
 } from "../types";
 
@@ -195,6 +196,37 @@ export async function getFollows(userId: string): Promise<FollowsResponse> {
   };
 }
 `;
+
+/**
+ * One suggestion per function in FIX_FILE_TEXT, keyed by the line its header
+ * sits on. Keyed rather than constant because the arguments box is only worth
+ * reviewing when it holds a value that fits the signature it is sitting under.
+ */
+export const FIX_SAMPLES: Record<number, ProbeArgSuggestion> = {
+  7: {
+    args: [{ status: 404 }],
+    note: "From the test that pins the 404 case.",
+    kind: "test",
+    source: "follow-server.utils.test.ts:14",
+  },
+  12: {
+    args: [{ status: 404 }, 404],
+    note: "Built from the parameter types; no test calls this directly.",
+    kind: "shape",
+  },
+  25: {
+    args: [{ status: "rejected", reason: { status: 404 } }, "follows"],
+    note: "From the test that proves not-found becomes an empty list.",
+    kind: "test",
+    source: "follow-server.utils.test.ts:29",
+  },
+  38: {
+    args: ["usr_8134"],
+    note: "From the call site in the follows page.",
+    kind: "callsite",
+    source: "src/follows/page.tsx:22",
+  },
+};
 
 const FIX_DIFF = `diff --git a/apps/atlas-network-lanternpost/src/follows/utils/follow-server.utils.ts b/apps/atlas-network-lanternpost/src/follows/utils/follow-server.utils.ts
 index 8a1c2f4..3d9e77b 100644

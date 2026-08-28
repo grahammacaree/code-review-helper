@@ -133,6 +133,13 @@ export function FileInspect({
     dropBrief();
   }, [card?.path]);
 
+  // A sandbox opened straight onto a function still needs its sample argument;
+  // only the click path used to ask for one.
+  useEffect(() => {
+    if (openFn) openSandbox(openFn);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openFn?.startLine]);
+
   const here = annotations.filter((a) => a.path === card?.path);
 
   function thread(note: Annotation) {
@@ -163,6 +170,40 @@ export function FileInspect({
     setSampleNote(null);
     setSampleKind(null);
     dropBrief();
+  }
+
+  /**
+   * Opens the sandbox on a function and fills the arguments box with the best
+   * sample the host can find, falling back to per-parameter placeholders while
+   * that search runs.
+   */
+  function openSandbox(next: FnBlock) {
+    const gen = ++sampleGen.current;
+    sampleAbort.current?.abort();
+    const ac = new AbortController();
+    sampleAbort.current = ac;
+    setFn(next);
+    dropBrief();
+    setArgsJson(defaultArgsJson(next));
+    setSampleKind("loading");
+    setSampleNote("Looking in tests and fixtures for a sample argument…");
+    void onSuggestArgs(next.startLine, ac.signal)
+      .then((sample) => {
+        if (sampleGen.current !== gen) return;
+        setArgsJson(JSON.stringify(sample.args, null, 2));
+        setSampleKind(sample.kind);
+        setSampleNote(sample.note);
+      })
+      .catch((err: unknown) => {
+        if (sampleGen.current !== gen) return;
+        if (err instanceof Error && err.name === "AbortError") return;
+        setSampleKind("placeholder");
+        setSampleNote(
+          err instanceof Error
+            ? err.message
+            : "Could not search tests; using placeholders.",
+        );
+      });
   }
 
   function dropBrief() {
@@ -298,34 +339,7 @@ export function FileInspect({
                 closeProbe();
                 return;
               }
-              const gen = ++sampleGen.current;
-              sampleAbort.current?.abort();
-              const ac = new AbortController();
-              sampleAbort.current = ac;
-              setFn(next);
-              dropBrief();
-              setArgsJson(defaultArgsJson(next));
-              setSampleKind("loading");
-              setSampleNote(
-                "Looking in tests and fixtures for a sample argument…",
-              );
-              void onSuggestArgs(next.startLine, ac.signal)
-                .then((sample) => {
-                  if (sampleGen.current !== gen) return;
-                  setArgsJson(JSON.stringify(sample.args, null, 2));
-                  setSampleKind(sample.kind);
-                  setSampleNote(sample.note);
-                })
-                .catch((err: unknown) => {
-                  if (sampleGen.current !== gen) return;
-                  if (err instanceof Error && err.name === "AbortError") return;
-                  setSampleKind("placeholder");
-                  setSampleNote(
-                    err instanceof Error
-                      ? err.message
-                      : "Could not search tests; using placeholders.",
-                  );
-                });
+              openSandbox(next);
             }}
             renderNote={thread}
             busy={busy}

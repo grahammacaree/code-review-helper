@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Octicon } from "../components/Octicon";
 import { WalkView, type WalkActions } from "../components/WalkView";
 import type { FunctionBrief, ProbeArgSuggestion } from "../types";
-import { AUTH_MISSING, AUTH_OK, FIX_BRIEF, SCENARIOS } from "./fixtures";
+import {
+  AUTH_MISSING,
+  AUTH_OK,
+  FIX_BRIEF,
+  FIX_SAMPLES,
+  SCENARIOS,
+} from "./fixtures";
 
 /**
  * Design mode: every walk state on fixtures, with no agent and no server.
@@ -60,13 +66,20 @@ export function DesignMode() {
     onReply: () => undefined,
     onResolve: () => undefined,
     onProbe: () => undefined,
-    onSuggestArgs: (): Promise<ProbeArgSuggestion> =>
-      Promise.resolve({
-        args: [{ status: 404 }],
-        note: "Design mode: fixture argument, nothing was executed.",
-        kind: "fixture",
-        source: "follow-server.utils.test.ts",
-      }),
+    onSuggestArgs: (line): Promise<ProbeArgSuggestion> => {
+      const sample = FIX_SAMPLES[line];
+      if (!sample) {
+        return Promise.resolve({
+          args: [],
+          note: "Design mode: no fixture argument for this function.",
+          kind: "placeholder",
+        });
+      }
+      return Promise.resolve({
+        ...sample,
+        note: `${sample.note} Design mode: nothing was executed.`,
+      });
+    },
     onExplainFunction: (): Promise<FunctionBrief> =>
       Promise.resolve(FIX_BRIEF),
   };
