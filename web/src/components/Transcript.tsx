@@ -57,7 +57,7 @@ export function Transcript({
               churn={msg.large.churn}
               excluded={msg.large.excluded}
             />
-          ) : msg.kind === "dirty" || msg.kind === "status" || msg.kind === "probe" ? (
+          ) : msg.kind === "probe" ? (
             <pre className="bubble-pre">{msg.text}</pre>
           ) : (
             <Prose text={msg.text} />
