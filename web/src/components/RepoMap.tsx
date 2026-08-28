@@ -49,12 +49,16 @@ export function RepoMap({
   covered,
   currentPath,
   howItConnects,
+  browseable,
+  onOpenFile,
 }: {
   files: FileEntry[];
   queue: string[];
   covered: string[];
   currentPath?: string;
   howItConnects?: string;
+  browseable?: boolean;
+  onOpenFile?: (path: string) => void;
 }) {
   const tree = buildTree(files);
   const coveredSet = new Set(covered);
@@ -66,6 +70,11 @@ export function RepoMap({
         <div className="map-blurb">
           <h2>How it connects</h2>
           <Prose text={howItConnects} />
+          {browseable ? (
+            <p className="muted map-browse-hint">
+              Click a file to open it while you summarise.
+            </p>
+          ) : null}
         </div>
       ) : (
         <div className="map-blurb">
@@ -84,6 +93,8 @@ export function RepoMap({
               currentPath={currentPath}
               covered={coveredSet}
               queued={queued}
+              browseable={browseable}
+              onOpenFile={onOpenFile}
             />
           ))}
         </ul>
@@ -97,25 +108,49 @@ function TreeItem({
   currentPath,
   covered,
   queued,
+  browseable,
+  onOpenFile,
 }: {
   node: TreeNode;
   currentPath?: string;
   covered: Set<string>;
   queued: Set<string>;
+  browseable?: boolean;
+  onOpenFile?: (path: string) => void;
 }) {
   if (node.file) {
     const path = node.file.path;
-    const state = path === currentPath
-      ? "current"
-      : covered.has(path)
-        ? "covered"
-        : queued.has(path)
-          ? "queued"
-          : "other";
+    const state =
+      path === currentPath
+        ? "current"
+        : covered.has(path)
+          ? "covered"
+          : queued.has(path)
+            ? "queued"
+            : "other";
+    const canOpen = Boolean(browseable && onOpenFile);
     return (
       <li className={`tree-file ${state}`}>
-        <code>{node.name}</code>
-        <span className="kind">{node.file.chase ? "c" : node.file.kind[0]}</span>
+        {canOpen ? (
+          <button
+            type="button"
+            className="tree-file-btn"
+            aria-current={path === currentPath ? "page" : undefined}
+            onClick={() => onOpenFile?.(path)}
+          >
+            <code>{node.name}</code>
+            <span className="kind">
+              {node.file.chase ? "c" : node.file.kind[0]}
+            </span>
+          </button>
+        ) : (
+          <>
+            <code>{node.name}</code>
+            <span className="kind">
+              {node.file.chase ? "c" : node.file.kind[0]}
+            </span>
+          </>
+        )}
       </li>
     );
   }
@@ -130,6 +165,8 @@ function TreeItem({
             currentPath={currentPath}
             covered={covered}
             queued={queued}
+            browseable={browseable}
+            onOpenFile={onOpenFile}
           />
         ))}
       </ul>

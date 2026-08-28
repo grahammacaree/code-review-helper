@@ -131,7 +131,7 @@ Before we continue: in your own words, what does this file change do, and why wa
 
 If a **sibling Map** was shown, you may invite the divergence in the same paraphrase — still one gate, not a second quiz.
 
-When Look closer is none, keep the first teach-back paragraph. For **styles/barrel** files, the first paragraph is enough; do not demand property-by-property recitation. For **tests** locking a helper, what they guard and why is enough if the helper contract was already paraphrased upstream.
+When Look closer is none, keep the first teach-back paragraph. For **styles/barrel** files, the first paragraph is enough; do not demand property-by-property recitation. For **tests** locking a helper, what they guard and why is enough if the helper contract was already paraphrased upstream. Same-rename expectation updates: one line is enough; honor **skip remaining tests** / skip string-change files instead of another gate.
 
 ## Teach-back: inadequate
 
@@ -198,13 +198,18 @@ That’s the idea.
 
 ## Skip
 
-Only when they explicitly skip.
+Only when they explicitly skip. Skip this file, **skip remaining tests**
+(string-only / same-rename bookkeeping), or skip the rest of the walk.
 
 ```markdown
 Skipped `path/to/file.ts`.
 
 [Next file card, or wrap-up]
 ```
+
+If they asked to skip remaining same-rename tests, list those paths (or
+a count) and continue at the next non-test — do not open the next test
+card.
 
 ## Quit (large-PR gate or they end early)
 

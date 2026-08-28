@@ -525,6 +525,27 @@ textarea:focus {
   align-items: baseline;
 }
 
+.tree-file-btn {
+  display: flex;
+  gap: 0.3rem;
+  align-items: baseline;
+  margin: 0;
+  padding: 0.05rem 0.15rem;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tree-file-btn:hover,
+.tree-file-btn:focus-visible {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  outline: none;
+}
+
 .tree-file.current {
   color: var(--accent);
 }

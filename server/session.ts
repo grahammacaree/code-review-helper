@@ -30,9 +30,12 @@ import {
 } from "./git.js";
 import {
   assetsNote,
+  isTestPath,
   localThinTeachback,
   looksLikeQuestion,
   noiseNote,
+  pendingTestPaths,
+  skipIntent,
   walkQueue,
   wrapupFromCards,
 } from "./scaffold.js";
@@ -69,11 +72,14 @@ interface Session {
   phase: Phase;
   repoPath: string;
   homeBranch: string;
+  /** Branch checked out when the walk started (feature WIP), not necessarily main. */
   prRef: string;
   prUrl?: string;
   prTitle?: string;
   prBody?: string;
   baseRef?: string;
+  /** PR tip OID after checkout — inspect/browse refuse wrong worktrees. */
+  headOid?: string;
   dirtyStatus?: string;
   large?: { files: number; churn: string; excluded: string };
   files: FileEntry[];
@@ -133,18 +139,27 @@ export async function restoreSessions(): Promise<void> {
   for (const raw of await readAllSessions()) {
     const s = hydrate(raw);
     if (!s) continue;
-    try {
-      s.homeBranch = await defaultBranch(s.repoPath);
-    } catch {
-      s.homeBranch = s.homeBranch || "main";
+    if (!s.homeBranch) {
+      try {
+        s.homeBranch = await defaultBranch(s.repoPath);
+      } catch {
+        s.homeBranch = "main";
+      }
     }
     if (s.card) {
       try {
-        s.fileText = await readWorktreeFile(s.repoPath, s.card.path);
-        if (s.baseRef) {
-          s.diffText = await fileDiff(s.repoPath, s.baseRef, s.card.path);
+        if (s.headOid && !(await confirmHead(s.repoPath, s.headOid))) {
+          s.fileText =
+            "// Worktree is no longer on this PR tip — Restore or re-check out before browsing files.";
+          s.diffText = undefined;
+          s.fileWiring = undefined;
+        } else {
+          s.fileText = await readWorktreeFile(s.repoPath, s.card.path);
+          if (s.baseRef) {
+            s.diffText = await fileDiff(s.repoPath, s.baseRef, s.card.path);
+          }
+          s.fileWiring = await computeFileWiring(s);
         }
-        s.fileWiring = await computeFileWiring(s);
       } catch {
         /* file may have moved */
       }
@@ -169,6 +184,7 @@ function hydrate(raw: unknown): Session | undefined {
     prTitle: o.prTitle,
     prBody: o.prBody,
     baseRef: o.baseRef,
+    headOid: typeof o.headOid === "string" ? o.headOid : undefined,
     dirtyStatus: o.dirtyStatus,
     large: o.large,
     files: o.files ?? [],
@@ -445,7 +461,10 @@ export async function startSession(input: {
     throw new Error("Pass a GitHub PR URL or number.");
   }
 
-  const homeBranch = await defaultBranch(repoPath);
+  const onBranch = await currentBranch(repoPath);
+  const homeBranch =
+    onBranch ||
+    (await defaultBranch(repoPath).catch(() => "main"));
   let dirty = await porcelainStatus(repoPath);
   if (dirty && input.allowStash) {
     await stash(repoPath);
@@ -508,6 +527,7 @@ async function checkoutAndMaybeGate(
   s.prTitle = s.prTitle || meta.title;
   s.prBody = s.prBody || meta.body;
   s.baseRef = meta.baseRef;
+  s.headOid = meta.headOid;
   const ok = await confirmHead(s.repoPath, meta.headOid);
   if (!ok) {
     throw new Error("Local HEAD does not match the PR tip after checkout.");
@@ -647,15 +667,17 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
   throwIfAborted(s);
   s.teachback = undefined;
   s.paraphrasedCurrent = false;
+  if (s.headOid && !(await confirmHead(s.repoPath, s.headOid))) {
+    throw new Error(
+      "Worktree left the PR tip mid-walk. Check out the PR again or Restore your starting branch.",
+    );
+  }
   if (index >= s.queue.length) {
     s.workingOn = "Writing wrap-up…";
     s.wrapup = wrapupFromCards(s.cards);
-    s.card = undefined;
-    s.fileText = undefined;
-    s.diffText = undefined;
-    s.fileWiring = undefined;
-    s.focusLine = undefined;
+    // Keep the last inspect pane open so wrap-up can name wiring / symbols.
     s.chaseCandidates = [];
+    s.probe = undefined;
     s.phase = "wrapup";
     push(s, {
       role: "assistant",
@@ -791,12 +813,27 @@ export async function submitTeachback(
       if (s.card && !s.covered.includes(s.card.path)) {
         s.covered.push(s.card.path);
       }
-      await advanceToFile(s, s.covered.length);
+      await advanceToFile(s, nextQueueIndex(s));
     });
   }
 
   if (looksLikeQuestion(trimmed)) {
     return withBusy(s, () => replyToQuestion(s, trimmed));
+  }
+
+  if (s.phase === "file" && s.card) {
+    const intent = skipIntent(trimmed, {
+      pendingTests: pendingTestPaths(s.queue, s.covered).length,
+    });
+    if (intent === "this") {
+      return skipCurrentFile(s, { alreadyPushed: true });
+    }
+    if (intent === "busywork") {
+      return skipBusyworkFiles(s, { alreadyPushed: true });
+    }
+    if (intent === "rest") {
+      return skipRestOfWalk(s, { alreadyPushed: true });
+    }
   }
 
   return withBusy(s, async () => {
@@ -824,7 +861,7 @@ export async function submitTeachback(
           s.covered.push(s.card.path);
           rememberParaphrase(s, trimmed);
         }
-        await advanceToFile(s, s.covered.length);
+        await advanceToFile(s, nextQueueIndex(s));
       } else if (result.kind === "question_after" && s.paraphrasedCurrent) {
         // stay; UI shows the answer and a Next control
       } else if (result.kind === "question_after") {
@@ -873,38 +910,223 @@ export async function continueAfterQuestion(
     s.covered.push(s.card.path);
   }
   return withBusy(s, async () => {
-    await advanceToFile(s, s.covered.length);
+    await advanceToFile(s, nextQueueIndex(s));
   });
 }
 
-export async function skipFile(id: string): Promise<SessionSnapshot> {
-  const s = get(id);
-  if (s.phase !== "file" || !s.card) {
-    throw new Error("No file to skip.");
+function nextQueueIndex(s: Session): number {
+  const i = s.queue.findIndex((p) => !s.covered.includes(p));
+  return i === -1 ? s.queue.length : i;
+}
+
+function coverPaths(s: Session, paths: string[]): string[] {
+  const added: string[] = [];
+  for (const path of paths) {
+    if (!s.covered.includes(path)) {
+      s.covered.push(path);
+      added.push(path);
+    }
   }
-  push(s, {
-    role: "user",
-    kind: "text",
-    text: s.card.chase
-      ? `Done looking at ${s.card.path}`
-      : `Skip ${s.card.path}`,
-  });
-  s.covered.push(s.card.path);
+  return added;
+}
+
+function noteSkip(s: Session, message: string): void {
   s.teachback = {
     adequate: true,
     kind: "adequate",
-    message: s.card.chase
-      ? `Done looking at ${s.card.path}.`
-      : `Skipped ${s.card.path}.`,
+    message,
   };
   push(s, {
     role: "assistant",
     kind: "teachback",
     text: s.teachback.message,
   });
+}
+
+async function finishSkip(
+  s: Session,
+  message: string,
+): Promise<SessionSnapshot> {
+  noteSkip(s, message);
+  const current = s.card?.path;
+  const next = nextQueueIndex(s);
+  if (current && s.queue[next] === current) {
+    return snapshot(s);
+  }
   return withBusy(s, async () => {
-    await advanceToFile(s, s.covered.length);
+    await advanceToFile(s, next);
   });
+}
+
+async function skipCurrentFile(
+  s: Session,
+  opts: { alreadyPushed: boolean },
+): Promise<SessionSnapshot> {
+  if (s.phase !== "file" || !s.card) {
+    throw new Error("No file to skip.");
+  }
+  const path = s.card.path;
+  if (!opts.alreadyPushed) {
+    push(s, {
+      role: "user",
+      kind: "text",
+      text: s.card.chase ? `Done looking at ${path}` : `Skip ${path}`,
+    });
+  }
+  coverPaths(s, [path]);
+  return finishSkip(
+    s,
+    s.card.chase ? `Done looking at ${path}.` : `Skipped ${path}.`,
+  );
+}
+
+function busyworkPaths(s: Session): string[] {
+  const paths = pendingTestPaths(s.queue, s.covered);
+  if (s.card && isTestPath(s.card.path) && !paths.includes(s.card.path)) {
+    return [s.card.path, ...paths];
+  }
+  return paths;
+}
+
+async function skipBusyworkFiles(
+  s: Session,
+  opts: { alreadyPushed: boolean },
+): Promise<SessionSnapshot> {
+  if (s.phase !== "file" || !s.card) {
+    throw new Error("No file to skip.");
+  }
+  const paths = busyworkPaths(s);
+  if (!paths.length) {
+    if (!opts.alreadyPushed) {
+      throw new Error("No remaining test files to skip.");
+    }
+    noteSkip(s, "No remaining test files to skip.");
+    return snapshot(s);
+  }
+  if (!opts.alreadyPushed) {
+    push(s, {
+      role: "user",
+      kind: "text",
+      text: `Skip remaining tests (${paths.join(", ")})`,
+    });
+  }
+  coverPaths(s, paths);
+  const listed =
+    paths.length <= 4
+      ? paths.map((p) => `\`${p}\``).join(", ")
+      : `${paths.length} test files`;
+  return finishSkip(s, `Skipped ${listed}.`);
+}
+
+async function skipRestOfWalk(
+  s: Session,
+  opts: { alreadyPushed: boolean },
+): Promise<SessionSnapshot> {
+  if (s.phase !== "file" || !s.card) {
+    throw new Error("No file to skip.");
+  }
+  const rest = s.queue.filter((p) => !s.covered.includes(p));
+  if (!opts.alreadyPushed) {
+    push(s, {
+      role: "user",
+      kind: "text",
+      text: "Skip remaining files",
+    });
+  }
+  coverPaths(s, rest);
+  return finishSkip(
+    s,
+    rest.length === 1
+      ? `Skipped \`${rest[0]}\`.`
+      : `Skipped ${rest.length} remaining files.`,
+  );
+}
+
+export async function skipFile(id: string): Promise<SessionSnapshot> {
+  return skipCurrentFile(get(id), { alreadyPushed: false });
+}
+
+export async function skipBusywork(id: string): Promise<SessionSnapshot> {
+  return skipBusyworkFiles(get(id), { alreadyPushed: false });
+}
+
+/** Open a changed file in the inspect pane without moving the walk gate. */
+export async function browseFile(
+  id: string,
+  path: string,
+): Promise<SessionSnapshot> {
+  const s = get(id);
+  if (s.phase !== "wrapup" && s.phase !== "done") {
+    throw new Error("Browse files from the map during wrap-up (or after).");
+  }
+  const trimmed = path.trim();
+  if (!trimmed) throw new Error("Pick a file path.");
+  if (s.card?.path === trimmed && s.fileText !== undefined) {
+    return snapshot(s);
+  }
+  return withBusy(
+    s,
+    async () => {
+      await loadInspectFile(s, trimmed);
+    },
+    `Opening ${trimmed}…`,
+  );
+}
+
+async function loadInspectFile(s: Session, path: string): Promise<void> {
+  if (s.headOid && !(await confirmHead(s.repoPath, s.headOid))) {
+    throw new Error(
+      "Worktree is no longer on this PR tip. Restore your branch or re-check out the PR before browsing files.",
+    );
+  }
+  const entry = s.files.find((f) => f.path === path);
+  if (!entry) throw new Error(`Unknown changed file: ${path}`);
+  const prior = [...s.cards].reverse().find((c) => c.path === path);
+  s.card = prior ?? browseCard(entry, s);
+  s.probe = undefined;
+  s.chaseCandidates = [];
+  try {
+    s.diffText = await fileDiff(s.repoPath, s.baseRef || "main", path);
+  } catch {
+    s.diffText = undefined;
+  }
+  if (entry.kind === "deleted") {
+    s.fileText = undefined;
+    s.fileWiring = undefined;
+    s.focusLine = undefined;
+    return;
+  }
+  try {
+    s.fileText = await readWorktreeFile(s.repoPath, path);
+  } catch {
+    s.fileText = "// Could not read this path from HEAD.";
+  }
+  s.fileWiring = await computeFileWiring(s);
+  s.focusLine =
+    s.card.lookCloser[0]?.startLine || s.card.focus[0]?.start || 1;
+}
+
+function browseCard(
+  entry: FileEntry,
+  s: Session,
+): NonNullable<Session["card"]> {
+  return {
+    path: entry.path,
+    kind: entry.kind,
+    oldPath: entry.oldPath,
+    focus: [],
+    what: "Reference view — this path was not given a full walk card (often skipped).",
+    why: "Open it from the map to check symbols and wiring while finishing the summary.",
+    links: "",
+    lookCloser: [],
+    couldHave: [],
+    uhOh: [],
+    index: s.covered.indexOf(entry.path) + 1 || s.cards.length,
+    total: s.queue.length || s.files.length,
+    chase: entry.chase,
+    chaseFrom: entry.chaseFrom,
+    chaseNames: entry.chaseNames,
+  };
 }
 
 export async function startChase(
@@ -1037,8 +1259,8 @@ async function maybeWriteCommentary(s: Session): Promise<void> {
 }
 
 function restoreTarget(s: Session): string {
-  // Stacked PRs base on a parent feature branch; send them home to the
-  // repo default (usually main), not the PR base.
+  // Prefer the branch they were on when the walk started (often a WIP
+  // feature branch). Never the PR tip; fall back to repo default.
   return s.homeBranch || "main";
 }
 

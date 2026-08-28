@@ -1,7 +1,7 @@
 import { Agent, Cursor, CursorAgentError } from "@cursor/sdk";
 import { cursorApiKey, cursorModel } from "./env.js";
 import { fileDiff, githubDiffUrl, parseFocusFromDiff, readWorktreeFile } from "./git.js";
-import { fileLinks } from "./scaffold.js";
+import { fileLinks, isTestPath } from "./scaffold.js";
 import type {
   FileCard,
   FileEntry,
@@ -229,6 +229,9 @@ export async function generateFileCard(opts: {
       overviewBits,
       commentaryPromptBlock(opts.commentary),
       `Hunks:\n${diff || "(empty diff)"}`,
+      opts.covered.some((p) => isTestPath(p)) && isTestPath(opts.entry.path)
+        ? "This is a later test/spec in a walk that already covered a test. If the hunk is only expected-string / assertion updates for a rename already walked, keep what/why to 1–2 sentences, leave lookCloser empty, and do not invent a new quiz. They may skip remaining same-rename tests."
+        : "",
     ]
       .filter(Boolean)
       .join("\n\n"),
@@ -507,7 +510,7 @@ export async function gradeTeachback(opts: {
             `Grade this teach-back for ${opts.card?.path}.`,
             "Pass if they explained what this file does and why it changed, in their own words, well enough to tell a teammate.",
             "Credit the walk so far. If they already explained a contract (boolean polarity, flag meaning, return shape) on an earlier file, do not fail this file for not repeating it. Tests, callers, and wiring of that helper: pass when they say what this file locks in and why it exists relative to that contract.",
-            "Scale to file role: styles/barrels = intent, not every key. Tests = what they guard and why, not Redis/TTL/off-by-one internals unless this file's Look closer named that as a behavior pivot.",
+            "Scale to file role: styles/barrels = intent, not every key. Tests = what they guard and why, not Redis/TTL/off-by-one internals unless this file's Look closer named that as a behavior pivot. If the hunk is only a renamed expectation string they already explained on config/bootstrap, pass a one-liner — do not stay for a distinct contract. If they asked to skip remaining string-only / same-rename tests, that is a skip, not thin.",
             "Shared gates/screens: what + why (+ roughly who consumes / which signal) is enough.",
             "Stay messages: one missing high-level piece. Do not dump a checklist of five omissions.",
             pivotHint

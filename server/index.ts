@@ -15,6 +15,8 @@ import {
   restoreSessions,
   restoreBranch,
   skipFile,
+  skipBusywork,
+  browseFile,
   startChase,
   stashAndContinue,
   startFiles,
@@ -124,6 +126,23 @@ app.post("/api/sessions/:id/next", async (req, res) => {
 app.post("/api/sessions/:id/skip", async (req, res) => {
   try {
     res.json(await skipFile(sessionId(req)));
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/api/sessions/:id/skip-tests", async (req, res) => {
+  try {
+    res.json(await skipBusywork(sessionId(req)));
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/api/sessions/:id/browse", async (req, res) => {
+  try {
+    const path = (req.body as { path?: string }).path ?? "";
+    res.json(await browseFile(sessionId(req), path));
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
   }

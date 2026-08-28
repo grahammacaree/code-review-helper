@@ -9,6 +9,7 @@ export type ChipAction =
   | "all"
   | "start"
   | "skip"
+  | "skipTests"
   | "chase"
   | "next"
   | "restore"
@@ -203,6 +204,12 @@ function chipsFor(
         (c) => !session.queue.includes(c.path) && !session.covered.includes(c.path),
       );
       const chasing = Boolean(session.card?.chase);
+      const pendingTests = (session.queue ?? []).filter(
+        (p) =>
+          !(session.covered ?? []).includes(p) &&
+          (/\.(test|spec)\./i.test(p) ||
+            /(^|\/)(__tests__|tests?|spec)\//i.test(p)),
+      );
       return [
         ...(session.teachback?.kind === "question_after"
           ? [{ action: "next" as const, label: "Next file", primary: true }]
@@ -216,6 +223,18 @@ function chipsFor(
                     ? "Chase outside caller"
                     : `Chase ${pending.length} outside callers`,
                 primary: true,
+              },
+            ]
+          : []),
+        ...(pendingTests.length > 1 ||
+        (pendingTests.length === 1 && session.card?.path !== pendingTests[0])
+          ? [
+              {
+                action: "skipTests" as const,
+                label:
+                  pendingTests.length === 1
+                    ? "Skip remaining test"
+                    : `Skip ${pendingTests.length} remaining tests`,
               },
             ]
           : []),

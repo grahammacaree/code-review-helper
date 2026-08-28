@@ -160,6 +160,8 @@ export function App() {
     else if (action === "all") void run((signal) => api.large(id, "all", signal));
     else if (action === "start") void run((signal) => api.start(id, signal));
     else if (action === "skip") void run((signal) => api.skip(id, signal));
+    else if (action === "skipTests")
+      void run((signal) => api.skipTests(id, signal));
     else if (action === "chase") void run((signal) => api.chase(id, undefined, signal));
     else if (action === "next") void run((signal) => api.next(id, signal));
     else if (action === "restore") void run((signal) => api.restore(id, signal));
@@ -202,6 +204,13 @@ export function App() {
             covered={session?.covered ?? []}
             currentPath={session?.card?.path}
             howItConnects={session?.overview?.howItConnects}
+            browseable={
+              session?.phase === "wrapup" || session?.phase === "done"
+            }
+            onOpenFile={(path) => {
+              if (!session) return;
+              void run((signal) => api.browse(session.id, path, signal));
+            }}
           />
         }
         bottom={

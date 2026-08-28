@@ -117,13 +117,68 @@ export function looksLikeQuestion(text: string): boolean {
   );
 }
 
+export function isTestPath(path: string): boolean {
+  const p = path.toLowerCase();
+  return /\.(test|spec)\./.test(p) || /(^|\/)(__tests__|tests?|spec)\//.test(p);
+}
+
+export function pendingTestPaths(
+  queue: string[],
+  covered: string[],
+): string[] {
+  const done = new Set(covered);
+  return queue.filter((p) => !done.has(p) && isTestPath(p));
+}
+
+export type SkipIntent = "this" | "busywork" | "rest";
+
+export function skipIntent(
+  text: string,
+  ctx: { pendingTests: number },
+): SkipIntent | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  if (
+    /^(skip(?: this(?: file)?)?|skip it|skip for now|i['’]?m stuck|stuck)\.?$/iu.test(
+      trimmed,
+    )
+  ) {
+    return "this";
+  }
+  if (
+    /\b(string[- ]changes?|bookkeeping|low[- ]diff|busywork)\b/iu.test(trimmed) ||
+    /\bskip(?:ping)?\s+(?:the\s+)?(?:remaining\s+|rest\s+of\s+(?:the\s+|these\s+)?)?tests?\b/iu.test(
+      trimmed,
+    ) ||
+    /\bskip(?:ping)?\s+files\b/iu.test(trimmed) ||
+    /\bwe can skip (?:files|those|the tests)\b/iu.test(trimmed)
+  ) {
+    return "busywork";
+  }
+  if (
+    /\bskip(?:ping)?\s+(?:ahead(?:\s+to\s+wrap-?up)?|the\s+rest\s+of\s+(?:the\s+)?(?:walk|pr|queue)|remaining files)\b/iu.test(
+      trimmed,
+    )
+  ) {
+    return "rest";
+  }
+  if (
+    /^(skip(?:ping)?\s+(?:the\s+)?(?:rest|remaining)(?:\s+files?)?)\.?$/iu.test(
+      trimmed,
+    )
+  ) {
+    return ctx.pendingTests > 0 ? "busywork" : "rest";
+  }
+  return null;
+}
+
 function wordCount(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }
 
 function queueRank(path: string): number {
   const p = path.toLowerCase();
-  if (/\.(test|spec)\./.test(p) || /(^|\/)(__tests__|tests?|spec)\//.test(p)) {
+  if (isTestPath(path)) {
     return 80;
   }
   if (/\.mdx?$/.test(p)) return 70;

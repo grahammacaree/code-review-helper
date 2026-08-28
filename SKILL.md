@@ -322,7 +322,7 @@ Match depth to **file role** (styles stay in the walk — lighter bar, not skipp
 | **Shared gate / wiring** (HOC, shared query wrapper, central module) | what + why + roughly who consumes it / Empty vs Error (or equivalent) split. |
 | **Screen / route** | what the user sees + which signal drives refresh/retry if this PR touches that. |
 | **Styles / barrel** | Tokens vs magic numbers, shared layout with sibling state components, barrel as public entry — not property-by-property. |
-| **Test / spec locking a helper** | What this file guards and why (awkward E2E, regression). Do not re-quiz the helper’s full contract if they already explained it. |
+| **Test / spec locking a helper** | What this file guards and why (awkward E2E, regression). Do not re-quiz the helper’s full contract if they already explained it. Same-rename / expected-string-only tests: a one-liner is enough; if they ask to skip the rest of those files, skip them — do not stay for another paraphrase. |
 
 **Role in PR** and **Wiring** help them place the file — welcome in the paraphrase but not required verbatim. If Look closer named hotspots, **prefer** asking about them by name (and may point at the line range). On **behavior pivots**, naming the pivot (or the wrong alternative) is expected for a pass when Look closer called it out. On other files, hotspot names remain a plus, not a hard gate when the file-level explanation is solid. If a Map (in-file or sibling) was given, how the pieces connect is welcome in the same paraphrase, not a separate gate. Do not advance on “next” / “lgtm” alone.
 
@@ -359,9 +359,16 @@ surface differences → optional open question).
 - Clarifying or **not-part-of-review** question **after** they already
   paraphrased well enough: answer, then continue (next file, or wait for
   **next**). Do not make them recap the whole file.
-- Escape hatch only if they explicitly say skip / I’m stuck, skip this file.
+- Escape hatch if they explicitly say skip / I’m stuck / skip this file.
   Note the skip and move on. (Final summary has no skip unless they end
   the walkthrough.)
+- **Skip remaining busywork when they ask.** If they say skip remaining
+  tests, skip files that are just this string change / rename, skip
+  bookkeeping, or skip the rest while leftover queue items are tests:
+  cover those test/spec paths and continue with the next non-test (or
+  wrap-up). Do not generate the next identical-expectation test card and
+  demand a one-liner. “Skip the rest of the walk” / skip remaining files
+  still drops the rest of the queue.
 
 “Good enough” means they could explain it to a teammate, not that they
 recited the card. **Credit earlier files.** If they already explained a
@@ -449,6 +456,8 @@ confusion.
 - Do not stay with a checklist of internals (TTL, off-by-one, skip flags)
   when they already have the high-level what/why; one missing piece.
 - Do not advance without a teach-back (or an explicit skip).
+- Do not keep walking same-rename / string-only test files after they
+  asked to skip that busywork.
 - Do not confuse this skill with an automated defect hunt.
 - Do not invent uh-ohs to look thorough.
 - Do not invent Could have alternatives on obvious or thin files.
