@@ -1,6 +1,6 @@
 # Code review helper
 
-This project sets up a file-by-file PR walkthrough with a teach-back gate, ensuring code reviewers actually understand the change set in a given PR before they put their name on the approvals.
+Code reviewers should actually understand a change set before they put their name on the approval. This project makes that easier by opening pull requests as a file-by-file PR walkthrough with a teach-back gate.
 
 This repo has two surfaces that share the same rough workflow:
 
