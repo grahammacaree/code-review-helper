@@ -11,7 +11,7 @@ The local app is the primary tool. The skill is a lighter, portable copy of the 
 
 ![A file card mid-walk: what / why / role / concept / wiring on the left, the local file at the changed lines on the right, with an inline comment thread anchored to the hunk.](docs/walkthrough.png)
 
-![The function sandbox: the function's source on the left, editable, with inferred arguments and a result pane on the right.](docs/function-sandbox.png)
+![The function sandbox on its About tab: what the function does, why it exists, one caution about editing it, and the facts parsed from the checkout — beside an editable arguments box and a result pane.](docs/function-sandbox.png)
 
 This project is intended mainly as personal software and as such may incorporate some of my own ideosyncracies — if you try it out and it doesn’t work for you, it will probably require some tweaks to accommodate your personal workflow. 
 
