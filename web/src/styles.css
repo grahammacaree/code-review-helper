@@ -1331,6 +1331,11 @@ button.hotspot {
   gap: 0.5rem;
 }
 
+/* An answer being replaced steps back so the wait is visible at a glance. */
+.sandbox-about[aria-busy="true"] section {
+  opacity: 0.55;
+}
+
 .sandbox-about-foot {
   margin-top: auto;
   padding-top: 0.25rem;

@@ -284,9 +284,10 @@ function About({
 }) {
   if (!brief) {
     return (
-      <div className="sandbox-about waiting">
+      <div className="sandbox-about waiting" aria-busy={busy}>
         {busy ? (
-          <p className="muted">
+          <p className="status working" role="status">
+            <span className="spinner" aria-hidden="true" />
             Reading this function, its callers, and the repo notes…
           </p>
         ) : (
@@ -305,8 +306,16 @@ function About({
     );
   }
   return (
-    <div className="sandbox-about">
+    <div className="sandbox-about" aria-busy={busy}>
       {error && <p className="status error">{error}</p>}
+      {/* The old answer stays readable while a fresh one is on its way, so the
+          wait needs saying out loud rather than only on the button. */}
+      {busy && (
+        <p className="status working" role="status">
+          <span className="spinner" aria-hidden="true" />
+          Asking again…
+        </p>
+      )}
       <section>
         <h4>What it does</h4>
         <p>{brief.what}</p>
