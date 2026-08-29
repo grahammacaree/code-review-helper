@@ -15,7 +15,7 @@ Teach the change set so the reviewer’s approval is earned, not skimmed.
 This is not an automated defect hunt and not a ship checklist — but it
 **is** preparation for the real GitHub approve / request-changes step.
 
-Two postures, one walk. On a repo they already own, slightly bend uh-ohs
+Two postures, one walk. On a repo they already own, slightly bend be careful notes
 toward the questions they are expected to catch (isolation, cache, the
 seams that matter *here*). On a repo they are catching up on, spend that
 same attention on the teachable big picture — what kind of app this is,
@@ -49,13 +49,13 @@ Copy the output shapes from [templates.md](templates.md).
    connections / repo kind + Watch for) + ordered file queue. Stop. Do
    not start file 1 until they say go / start.
 4. One file card per turn (what / why / role in PR / wiring / links /
-   look closer / could have / uh oh), plus a **per-file** GitHub **Diff**
+   look closer / could have / be careful), plus a **per-file** GitHub **Diff**
    link when useful. Open the **local file** in the editor beside the chat.
    Huge generated files: hunks only.
 5. Teach-back gate: do not advance until they explain the file in their
    own words. Side questions are allowed; do not make them recap a file
    they already explained.
-6. After the last file: lingering uh-ohs, then a **final teach-back** —
+6. After the last file: lingering be careful notes, then a **final teach-back** —
    they summarise the whole PR. Do not dump a second full recap first.
 7. Offer to return them to the branch they were on before checkout.
 
@@ -171,7 +171,7 @@ shape in [templates.md](templates.md):
   backend, mixed), from manifests and docs — not a guess. Then **Watch
   for**: 0–5 seams from `AGENTS.md` / `CONTRIBUTING` / Cursor rules, or
   from that kind (isolation, cache, client vs server, offline, authz).
-  Bias later uh-ohs when the hunk hits the seam. Not a new teach-back
+  Bias later be careful notes when the hunk hits the seam. Not a new teach-back
   gate. Do not invent house rules that are not in the docs or implied
   by the stack.
 - **Queue** — dependency / call-chain order: types/config → core logic →
@@ -271,7 +271,7 @@ checkout or for opening the local file.
 | **Links** | Queue context: files already covered and upcoming in the walk — complements Wiring (narrative order vs import graph). |
 | **Look closer** | 0–3 **named** functions/methods (or other hotspots) that are complex or novel, and are central to understanding this change. Each entry: **name + line range + why** (new protocol, dense control flow, non-obvious invariant, first of its kind here). On large files, line ranges are **required** — a bare name is not enough to find the spot. If none, say “none”. Not thin wrappers, re-exports, or routine CRUD. **Behavior pivots:** when the hunk is tiny but the whole point is a semantic choice (e.g. `isRefetching` vs `isFetching`, manual refresh flag vs query `isRefetching`), prefer a Look closer entry on that symbol — even a one-liner — with why the wrong alternative fails. Do not leave Look closer as “none” on those files. |
 | **Could have** | 0–2 **design forks** on this file only when there was a real choice (API shape, layer, library, sync vs async), and when the code or surrounding context gives evidence that this was an intentional design choice. One line each: plausible alternative + short tradeoff vs what they shipped. If the file is obvious or there's no fork, say “none”. Not a teach-back requirement — counterfactual review, not “you should have done X.” |
-| **Uh oh** | 0–3 watch-outs: bugs, missing tests, risky edges, surprising coupling. Prioritize the highest-leverage risks implied by the code. If the overview named repo Watch for items, prefer those when this hunk actually hits that seam. Might be wrong. If none, say “none”. Do not invent. |
+| **Be careful** | 0–3 watch-outs: bugs, missing tests, risky edges, surprising coupling. Prioritize the highest-leverage risks implied by the code. If the overview named repo Watch for items, prefer those when this hunk actually hits that seam. Might be wrong. If none, say “none”. Do not invent. |
 
 **Map** (optional under Look closer) — two shapes; use when useful, omit when not:
 
@@ -283,7 +283,7 @@ checkout or for opening the local file.
 **Concept** is teaching, not review: it explains the system the file sits
 on so they leave the walk knowing how this repo caches, gates, persists,
 or reports — the context a senior teammate already has. It is not a risk
-(that is Uh oh), not a fork (Could have), and never something they must
+(that is Be careful), not a fork (Could have), and never something they must
 recite. One system per file at most; skip it rather than repeat yourself.
 
 **Concept depth is per-system and adapts.** The app tracks, privately in
@@ -305,8 +305,8 @@ A system unseen for ~4 months steps down one level, so stale knowledge gets
 re-grounded instead of assumed. Never surface the tag, the counts, or the fact
 that exposure is tracked — it changes the pitch, not the conversation.
 
-Look closer, Could have, and Uh oh are different buckets. The same
-function may appear in Look closer and Uh oh; Could have is about
+Look closer, Could have, and Be careful are different buckets. The same
+function may appear in Look closer and Be careful; Could have is about
 choices, not defects. Map is part of Look closer’s explanation, not a
 separate teach-back gate. Role in PR and Wiring are connection context —
 include them in the card, not as extra teach-back gates.
@@ -324,12 +324,12 @@ only when this file actually has it:
   Map when interlocking pieces need a path through the file **or** when
   sibling call sites diverge on the same UX; behavior-pivot symbols belong
   here even if the hunk is one line.
-- **Uh oh:** highest-leverage risks implied by the code (correctness,
+- **Be careful:** highest-leverage risks implied by the code (correctness,
   missing coverage, coupling) — not a tour of every review dimension.
 - **Could have:** evidenced design forks only.
 
 If a dimension is not central here, omit it. Tests, ops, consistency,
-and rollout belong in a later defect pass unless they *are* the uh-oh
+and rollout belong in a later defect pass unless they *are* the be careful note
 or the reason a function is in Look closer.
 
 For huge generated files: hunks only (see Opening turn). Do not open a
@@ -358,7 +358,7 @@ The parsed wiring graph is the walk (queued + covered). Checkout exists so they 
 
 When this file changes an exported contract and Wiring has no in-walk importers — or you know unchanged call sites exist — **explicitly watch** for blast radius. Do not auto-insert every consumer into the numbered queue.
 
-Offer a **chase**: they opt in. Insert at most a few unchanged paths after the current file. Chase cards are **thin** (why we are looking, what this site still assumes, uh-oh only if the new contract does not hold). No full what/why/role teach-back unless they want it. Skip / done-looking is enough. Do not recurse chase-on-chase.
+Offer a **chase**: they opt in. Insert at most a few unchanged paths after the current file. Chase cards are **thin** (why we are looking, what this site still assumes, be careful only if the new contract does not hold). No full what/why/role teach-back unless they want it. Skip / done-looking is enough. Do not recurse chase-on-chase.
 
 Side questions (“who else calls `foo`?”) remain the lighter path when they only want an answer, not a card.
 
@@ -406,7 +406,7 @@ Do fail (as thin) a pivot-file teach-back that never engages the
 wrong-alternative **and** they have not already explained that pivot.
 Stay messages: one missing high-level piece, not a checklist of internals
 (TTL, off-by-one, skip flags) unless that *is* this file’s pivot.
-Do not require them to cover Could have, Uh oh, Concept, or
+Do not require them to cover Could have, Be careful, Concept, or
 review-checklist items that were not in the card. If they engage the
 Concept beat, credit it and build on it in one sentence — do not turn it
 into a quiz on TTLs, cache keys, or migration order.
@@ -433,7 +433,7 @@ as understanding the existing diff.
 ## Wrap-up (final teach-back)
 
 After the last file, do **not** restate the opening overview. Give
-lingering uh-ohs (compact, evidence-backed, or “none”). If any file had
+lingering be careful notes (compact, evidence-backed, or “none”). If any file had
 a non-none **Could have**, add a short **Design forks** list — **at most
 1–2** high-value forks (file + fork in one line each), not a catalog of
 every Could have from the walk. Then ask for a structured summary in their
@@ -458,7 +458,7 @@ useful.
 ## Tone
 
 Direct, concise, sparse bolding. Teaching, not performative nitpicking.
-Uh-ohs are evidence-backed. Questions are the point — do not rush past
+Be careful notes are evidence-backed. Questions are the point — do not rush past
 confusion.
 
 ## Anti-patterns
@@ -487,9 +487,9 @@ confusion.
 - Do not keep walking same-rename / string-only test files after they
   asked to skip that busywork.
 - Do not confuse this skill with an automated defect hunt.
-- Do not invent uh-ohs to look thorough.
+- Do not invent be careful notes to look thorough.
 - Do not invent Could have alternatives on obvious or thin files.
-- Do not treat Look closer as Uh oh (or flag every new function).
+- Do not treat Look closer as Be careful (or flag every new function).
 - Do not put a Concept beat on every file, teach a system this checkout
   does not use, or restate the generic definition of caching / flags /
   migrations instead of how *this* repo does it.

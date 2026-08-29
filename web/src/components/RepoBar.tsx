@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { displayRepo } from "../recents";
 import type { AuthStatus, SessionSnapshot } from "../types";
 
@@ -27,14 +26,11 @@ export function RepoBar({
   onPr: (value: string) => void;
   onCheckout: () => void;
 }) {
-  const [expanded, setExpanded] = useState(!session);
   const statusError = error || session?.error;
   const working = busy || session?.busy;
+  // Once a walk is underway the form's only use is abandoning it, which is what
+  // Quit then New walkthrough is for. So the bar becomes plain identity.
   const compact = Boolean(session);
-
-  useEffect(() => {
-    if (session) setExpanded(false);
-  }, [session?.id]);
 
   const repoName = repoPath.replace(/\/$/, "").split("/").pop() || repoPath;
   const prLabel = session?.prRef ? `#${session.prRef}` : pr;
@@ -72,20 +68,14 @@ export function RepoBar({
 
   return (
     <header className={`repo-bar${compact ? " compact" : ""}`}>
-      {compact && !expanded ? (
-        <button
-          type="button"
-          className="repo-summary head-row"
-          aria-expanded="false"
-          aria-label={`Show repository form. ${repoName}${prLabel ? ` ${prLabel}` : ""}`}
-          onClick={() => setExpanded(true)}
-        >
-          <span>PR walkthrough</span>
+      {compact ? (
+        <div className="repo-summary head-row">
+          <h1>PR walkthrough</h1>
           <span className="head-sub">
             {repoName}
             {prLabel ? ` · ${prLabel}` : ""}
           </span>
-        </button>
+        </div>
       ) : (
         <>
           <div className="head-row">
@@ -94,15 +84,6 @@ export function RepoBar({
             <label className="head-sub" htmlFor="repo">
               Local repository
             </label>
-            {compact && (
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => setExpanded(false)}
-              >
-                Hide
-              </button>
-            )}
           </div>
           <form
             onSubmit={(e) => {
@@ -152,9 +133,7 @@ export function RepoBar({
           </form>
         </>
       )}
-      {compact && !expanded && (
-        <div className="repo-status">{statuses}</div>
-      )}
+      {compact && <div className="repo-status">{statuses}</div>}
     </header>
   );
 }

@@ -1288,7 +1288,7 @@ function commentaryEvidence(s: Session): string {
   const files = s.cards.map((c) => {
     const uhs = (c.uhOh ?? []).map((u) => u.text).join("; ");
     const what = (c.what || "").slice(0, 240);
-    return `- ${c.path}: ${what}${uhs ? ` | uh-oh: ${uhs.slice(0, 200)}` : ""}`;
+    return `- ${c.path}: ${what}${uhs ? ` | be careful: ${uhs.slice(0, 200)}` : ""}`;
   });
   const skips = s.messages
     .filter(
@@ -1325,7 +1325,7 @@ function commentaryEvidence(s: Session): string {
       : "",
     `Files:\n${files.join("\n") || "(none)"}`,
     skips.length ? `Skipped:\n${skips.join("\n")}` : "",
-    lingering ? `Lingering uh-ohs:\n${lingering.slice(0, 1500)}` : "",
+    lingering ? `Lingering be careful notes:\n${lingering.slice(0, 1500)}` : "",
     wrapParaphrase
       ? `Wrap-up from Graham:\n${wrapParaphrase}`
       : "(no wrap-up paraphrase yet)",

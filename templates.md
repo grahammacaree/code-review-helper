@@ -17,7 +17,7 @@ Use these shapes verbatim. Fill the brackets; do not add extra sections.
 
 **Repo:** [mobile app / website front-end / backend / mixed / unclear] — [evidence from package.json, native dirs, or docs]
 
-**Watch for** (bias uh-ohs when the hunk hits the seam; not a quiz):
+**Watch for** (bias be careful notes when the hunk hits the seam; not a quiz):
 - [doc bullet or kind-level question]
 - …
 
@@ -94,7 +94,7 @@ until then.
 
 **Could have:** [0–2 design forks: alternative + tradeoff vs what shipped, or **none**]
 
-**Uh oh:** [0–3 might-be-wrong watch-outs, or “none”]
+**Be careful:** [0–3 might-be-wrong watch-outs, or “none”]
 
 ---
 
@@ -112,7 +112,7 @@ Unchanged file. No full teach-back unless they keep going.
 
 **What this site still assumes:** [one short paragraph + look-closer line range if you have it]
 
-**Uh oh:** [only if the new contract does not hold here, or **none**]
+**Be careful:** [only if the new contract does not hold here, or **none**]
 
 ---
 
@@ -223,11 +223,11 @@ Stopping here. Want me to check out `[starting-branch]` again?
 
 ## Wrap-up
 
-Do not restate the opening overview. Uh-ohs, then their structured summary.
+Do not restate the opening overview. Be careful notes, then their structured summary.
 Design forks: at most 1–2 high-value items, or omit the section.
 
 ```markdown
-**Lingering uh-ohs:** [compact list, or “none”]
+**Lingering be careful notes:** [compact list, or “none”]
 
 **Design forks:** [at most 1–2 — file + fork in one line each — or omit]
 
@@ -253,7 +253,7 @@ That’s the idea.
 Want me to check out `[starting-branch]` again?
 
 If you are ready to approve or request changes on GitHub, take your notes
-(uh-ohs, open questions) with you — do not treat this walk as the review
+(be careful notes, open questions) with you — do not treat this walk as the review
 submission itself.
 
 If you want a defect pass next, say so. I won’t start one unless you ask.

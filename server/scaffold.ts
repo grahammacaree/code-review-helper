@@ -91,7 +91,7 @@ export function wrapupFromCards(cards: FileCard[]): Wrapup {
   return {
     lingeringUhOhs: uh.length
       ? uh.join("\n")
-      : "No lingering uh-ohs from the file cards.",
+      : "No lingering be careful notes from the file cards.",
     designForks: forks.length ? forks.join("\n") : undefined,
   };
 }

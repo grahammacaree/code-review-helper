@@ -4,7 +4,7 @@ import type { Annotation } from "../types";
 import { Octicon } from "./Octicon";
 
 /**
- * The box every anchored thread uses: comments, look-closer notes, uh-ohs. A
+ * The box every anchored thread uses: comments, look-closer notes, be careful notes. A
  * summary row that opens, so a line's worth of context never stacks up out of
  * sight at the bottom of the pane.
  */

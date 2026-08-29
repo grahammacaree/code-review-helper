@@ -17,7 +17,7 @@ export function reviewNotesMarkdown(session: SessionSnapshot): string {
   const uh = splitLines(session.wrapup?.lingeringUhOhs).filter(
     (line) => !/^No lingering/i.test(line),
   );
-  lines.push("## Lingering uh-ohs", "");
+  lines.push("## Lingering be careful notes", "");
   if (uh.length) {
     for (const line of uh) lines.push(`- ${line}`);
   } else {

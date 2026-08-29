@@ -255,7 +255,7 @@ export async function generateFileCard(opts: {
         `PR why: ${opts.overview.why}`,
         `How the queued files connect: ${opts.overview.howItConnects}`,
         opts.overview.repoNote
-          ? `Repo bias (tilt uh-ohs when this file hits the seam; do not invent rules; do not add sections):\n${opts.overview.repoNote}`
+          ? `Repo bias (tilt be careful notes when this file hits the seam; do not invent rules; do not add sections):\n${opts.overview.repoNote}`
           : "",
       ]
         .filter(Boolean)

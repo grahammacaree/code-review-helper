@@ -227,7 +227,7 @@ function FileBody({
           <NoteList items={card.couldHave} />
         </>
       )}
-      <h3>Uh oh</h3>
+      <h3>Be careful</h3>
       {card.uhOh.length === 0 ? (
         <p>None.</p>
       ) : (
@@ -239,7 +239,7 @@ function FileBody({
                 className="hotspot"
                 onClick={() =>
                   onLookCloser({
-                    name: "Uh oh",
+                    name: "Be careful",
                     startLine: u.startLine,
                     endLine: u.endLine,
                     why: u.text,
@@ -269,7 +269,7 @@ function WrapupBody({ wrapup }: { wrapup: Wrapup }) {
     .filter(Boolean);
   return (
     <>
-      <h2>Lingering uh-ohs</h2>
+      <h2>Lingering be careful notes</h2>
       <NoteList items={uh} />
       {forks.length > 0 && (
         <>

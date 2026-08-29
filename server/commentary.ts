@@ -98,13 +98,13 @@ export function commentaryPromptBlock(
     "Three jobs. Do not mix them: general.md is best-practice commentary Graham wrote (hand-edited; do not rewrite). user.md is Graham’s review craft. repos/*.md is a map of this checkout.",
     bundle.generalMarkdown.trim()
       ? [
-          "Best practices: tilt Could have / Uh oh when this file actually fights them (e.g. unit tests that lock UI presentation instead of behavior). Do not teach-back these notes. Do not invent extra card sections.",
+          "Best practices: tilt Could have / Be careful when this file actually fights them (e.g. unit tests that lock UI presentation instead of behavior). Do not teach-back these notes. Do not invent extra card sections.",
           `Best practices:\n${clip(bundle.generalMarkdown, 3500)}`,
         ].join("\n\n")
       : "",
     bundle.repoMarkdown.trim()
       ? [
-          "Checkout map: tilt uh-ohs / Look closer toward **What matters here** and **Watch next** when this file hits those seams.",
+          "Checkout map: tilt be careful notes / Look closer toward **What matters here** and **Watch next** when this file hits those seams.",
           "That file is about the codebase (packages, opt-in callers, fail-open). Not a grade of the reviewer. Do not quiz teach-back on it.",
           `Checkout map:\n${clip(bundle.repoMarkdown, 5000)}`,
         ].join("\n\n")

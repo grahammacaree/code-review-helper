@@ -131,7 +131,7 @@ export function FilePane({
       spots,
       lines.length,
       {
-        name: "Uh oh",
+        name: "Be careful",
         startLine: u.startLine,
         endLine: u.endLine,
         why: u.text,
@@ -253,12 +253,12 @@ export function FilePane({
                         type="button"
                         className="gutter-mark uh"
                         title={u.text}
-                        aria-label={`Uh oh: ${u.text}`}
+                        aria-label={`Be careful: ${u.text}`}
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
                           onLookCloser({
-                            name: "Uh oh",
+                            name: "Be careful",
                             startLine: u.startLine,
                             endLine: u.endLine,
                             why: u.text,
@@ -290,7 +290,7 @@ export function FilePane({
                   >
                     <ThreadBox
                       tone={tone}
-                      label={`${tone === "uh" ? "Uh oh" : "Look closer"} on ${range(spot)}`}
+                      label={`${tone === "uh" ? "Be careful with" : "Look closer at"} ${range(spot)}`}
                       open={isOpen}
                       peek={tone === "uh" ? spot.why : spot.name}
                       onToggle={() => {
