@@ -36,6 +36,8 @@ export interface Scenario {
   fn?: FnBlock;
   /** Which sandbox pane to open on, for reviewing About without a live agent. */
   fnPane?: "source" | "about";
+  /** Leaves the brief request hanging, so the waiting state can be reviewed. */
+  briefPending?: boolean;
   busy?: boolean;
   error?: string;
 }
@@ -692,6 +694,30 @@ export const SCENARIOS: Scenario[] = [
       header: "function valueFromSettledPromise<T>(",
     },
     fnPane: "about",
+  },
+  {
+    id: "sandbox-asking",
+    label: "Function sandbox \u00b7 Asking",
+    note: "Waiting on the agent for the brief. Check the wait is obvious without a brief to read, since this is a few seconds of nothing else happening.",
+    session: base({
+      overview: OVERVIEW,
+      card: FIX_CARD,
+      fileText: FIX_FILE_TEXT,
+      diffText: FIX_DIFF,
+      fileWiring: FIX_WIRING,
+      messages: FILE_MSGS,
+    }),
+    fn: {
+      name: "valueFromSettledPromise",
+      startLine: 25,
+      endLine: 36,
+      exported: false,
+      language: "ts",
+      params: ["settled", "label"],
+      header: "function valueFromSettledPromise<T>(",
+    },
+    fnPane: "about",
+    briefPending: true,
   },
   {
     id: "chase",

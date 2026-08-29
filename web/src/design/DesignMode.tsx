@@ -81,7 +81,9 @@ export function DesignMode() {
       });
     },
     onExplainFunction: (): Promise<FunctionBrief> =>
-      Promise.resolve(FIX_BRIEF),
+      scenario.briefPending
+        ? new Promise<FunctionBrief>(() => undefined)
+        : Promise.resolve(FIX_BRIEF),
   };
 
   return (

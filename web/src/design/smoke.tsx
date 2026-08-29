@@ -222,6 +222,40 @@ for (const s of SCENARIOS) {
   }
 }
 
+// Waiting on the agent has to look like waiting, in both About states: with no
+// brief yet, and with an old one still on screen while a fresh one is asked for.
+{
+  const scenario = SCENARIOS.find((s) => s.briefPending);
+  if (!scenario?.fn) {
+    fail("sandbox-asking", "no scenario leaves the brief pending");
+  } else {
+    for (const [what, brief] of [
+      ["empty", undefined],
+      ["refreshing", FIX_BRIEF],
+    ] as const) {
+      const html = renderToString(
+        <Sandbox
+          fn={scenario.fn}
+          path={scenario.session?.card?.path ?? ""}
+          fileText={scenario.session?.fileText}
+          busy={false}
+          argsJson="[]"
+          brief={brief}
+          briefBusy
+          initialPane="about"
+          onExplain={() => undefined}
+          onArgsJson={() => undefined}
+          onRun={() => undefined}
+          onClose={() => undefined}
+        />,
+      );
+      if (!html.includes('class="spinner"')) {
+        fail("sandbox-asking", `${what} About pane shows no spinner while busy`);
+      }
+    }
+  }
+}
+
 // A sample argument is only useful if it fits the signature it is offered
 // under, so each one is checked against the parameters of the function actually
 // at that line.
