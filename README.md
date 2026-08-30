@@ -155,6 +155,12 @@ A walk that starts from zero every time has to re-teach you things you already k
 
 These files feed later **cards** (be careful notes / Look closer) and are agent-only: none of it is shown on the opening overview. The **Repo** overview block is stack/docs Watch for (mobile vs website vs backend, `AGENTS.md` / contributing bullets), not private notes and not a detector of whether you already own the system.
 
+## What it sends
+
+A walk is a few dozen prompts on one agent, and the reviewer waits on each one, so what goes into a prompt is a design question rather than a tidying step. The short version: standing context (private notes, checkout map, overview) is sent once and repeated every few cards rather than with every card; files are excerpted around the thing being asked about instead of cut at their heads; the notes rewrite runs in the background; and anything a reviewer can trigger twice is cached with an explicit way to bypass it.
+
+[docs/token-efficiency.md](docs/token-efficiency.md) has the measurements, the guards that stop a cheaper prompt becoming a worse card, and the questions to ask before adding a prompt.
+
 ## Data and security
 
 This is personal local software, not a hosted product. Treat it that way.
@@ -204,6 +210,7 @@ Delete `data/` and `.env` if you want a clean slate. `New walkthrough` starts a 
 | `web/src/components/WalkView.tsx`   | The two-column walk surface; owns pane state only, so app and design mode cannot drift                                |
 | `web/src/design/`                   | Design mode: fixture states (`fixtures.ts`), the switcher (`DesignMode.tsx`), headless check (`smoke.tsx`)            |
 | `checks/parse.ts`                   | `npm run check:parse` — the function-finding and excerpting passes, on inline fixtures                                 |
+| `docs/token-efficiency.md`          | What each prompt sends and why, with measurements — read before adding a prompt                                        |
 
 
 In Cursor the skill id is `pr-file-walkthrough` so existing triggers keep working. This repo is named `code-review-helper`.
