@@ -200,9 +200,19 @@ function jsAt(
 function jsEnd(lines: string[], headerIdx: number): number {
   let depth = 0;
   let seen = false;
+  // Mirrors server/probe.ts: braces inside the parameter list are inline types,
+  // not the body, so nothing counts until the parameters close.
+  let paren = 0;
+  let inParams = false;
   for (let i = headerIdx; i < lines.length; i += 1) {
     const line = stripJsComment(lines[i]);
     for (const ch of line) {
+      if (!seen && (ch === "(" || ch === ")")) {
+        paren += ch === "(" ? 1 : -1;
+        inParams = paren > 0;
+        continue;
+      }
+      if (inParams) continue;
       if (ch === "{") {
         depth += 1;
         seen = true;

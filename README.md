@@ -189,6 +189,7 @@ Delete `data/` and `.env` if you want a clean slate. `New walkthrough` starts a 
 | `server/probe.ts`                   | Finds the function under the cursor; runs it — or your sandbox edit — in a scratch harness                            |
 | `server/samples.ts`                 | The argument ladder: test calls, typed fixtures, fixture builders, real call sites                                    |
 | `server/shapes.ts`                  | Last rung of that ladder: builds a value from the parameter's own type, following local imports                       |
+| `server/excerpt.ts`                 | Cuts a file down to the call sites or definition of a name, for chase prompts                                         |
 | `server/wiring.ts`                  | Import/export graph among **walk** files; `findOutsideImporters` for opt-in chase                                    |
 | `server/repoLens.ts`                | Checkout kind + doc/stack Watch for (overview + be-careful bias)                                                          |
 | `server/concepts.ts`                | Which architectural systems this checkout runs on + the staff-level framing taught when a hunk hits that seam         |
@@ -202,6 +203,7 @@ Delete `data/` and `.env` if you want a clean slate. `New walkthrough` starts a 
 | `web/src/components/Octicon.tsx`    | Inlined Octicon (MIT) 16px paths used by the tab bar                                                                 |
 | `web/src/components/WalkView.tsx`   | The two-column walk surface; owns pane state only, so app and design mode cannot drift                                |
 | `web/src/design/`                   | Design mode: fixture states (`fixtures.ts`), the switcher (`DesignMode.tsx`), headless check (`smoke.tsx`)            |
+| `checks/parse.ts`                   | `npm run check:parse` — the function-finding and excerpting passes, on inline fixtures                                 |
 
 
 In Cursor the skill id is `pr-file-walkthrough` so existing triggers keep working. This repo is named `code-review-helper`.

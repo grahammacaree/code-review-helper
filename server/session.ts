@@ -5,6 +5,9 @@ import {
   answerAnnotation,
   createReviewAgent,
   generateFileCard,
+  newPriming,
+  advancePriming,
+  type AgentPriming,
   generateChaseCard,
   generateOverview,
   gradeTeachback,
@@ -123,6 +126,12 @@ interface Session {
   workingOn?: string;
   error?: string;
   agent?: LocalAgent;
+  /** What that agent has already been told; dropped whenever it is replaced. */
+  primed?: AgentPriming;
+  /** Tail of the agent send queue, so only one run is ever in flight. */
+  agentQueue?: Promise<void>;
+  /** In-flight notes rewrite, started at wrap-up and awaited before closing. */
+  commentaryTask?: Promise<void>;
   paraphrasedCurrent: boolean;
   paraphrases: { path: string; text: string }[];
   homeRestored: boolean;
@@ -143,6 +152,9 @@ const sessions = new Map<string, Session>();
 function persist(s: Session): void {
   const {
     agent,
+    primed,
+    agentQueue,
+    commentaryTask,
     cancel,
     fileText,
     diffText,
@@ -401,12 +413,32 @@ function throwIfAborted(s: Session): void {
   }
 }
 
+/**
+ * Serialized because a session has one agent and one conversation: two sends in
+ * flight at once would interleave. Background work (the notes rewrite) queues
+ * behind whatever the reviewer asked for, rather than racing it.
+ */
 async function withAgent<T>(
+  s: Session,
+  fn: (agent: LocalAgent) => Promise<T>,
+): Promise<T> {
+  const mine = (s.agentQueue ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(() => sendOnAgent(s, fn));
+  s.agentQueue = mine.then(
+    () => undefined,
+    () => undefined,
+  );
+  return mine;
+}
+
+async function sendOnAgent<T>(
   s: Session,
   fn: (agent: LocalAgent) => Promise<T>,
 ): Promise<T> {
   if (!s.agent) {
     s.agent = await createReviewAgent(s.repoPath);
+    s.primed = newPriming();
   }
   try {
     return await fn(s.agent);
@@ -419,6 +451,7 @@ async function withAgent<T>(
       /* replace anyway */
     }
     s.agent = await createReviewAgent(s.repoPath);
+    s.primed = newPriming();
     return fn(s.agent);
   }
 }
@@ -750,8 +783,12 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
           overview: s.overview,
           commentary,
           concepts,
+          primed: s.primed,
         }),
       );
+  // Everything durable in that prompt is now in the agent's conversation, until
+  // enough cards have gone by that it is worth repeating.
+  if (s.primed) advancePriming(s.primed, concepts.map((c) => c.id));
   s.card = card;
   s.phase = "file";
   try {
@@ -796,14 +833,19 @@ export async function askAboutFile(
   return withBusy(s, () => replyToQuestion(s, trimmed));
 }
 
+/**
+ * What earlier files earned credit for, so a later file does not re-quiz it.
+ * Kept short on purpose: the agent said these words to the reviewer in this same
+ * conversation, so this is a reminder of which beats are filled, not a record.
+ */
 function priorParaphrases(
   s: Session,
 ): { path: string; text: string }[] {
-  const files = s.paraphrases.filter((p) => p.path !== "(wrap-up)").slice(-8);
-  const wrapups = s.paraphrases.filter((p) => p.path === "(wrap-up)").slice(-4);
+  const files = s.paraphrases.filter((p) => p.path !== "(wrap-up)").slice(-5);
+  const wrapups = s.paraphrases.filter((p) => p.path === "(wrap-up)").slice(-2);
   return [...files, ...wrapups].map((p) => ({
     path: p.path,
-    text: p.text.slice(0, 500),
+    text: p.text.slice(0, 300),
   }));
 }
 
@@ -903,7 +945,7 @@ export async function submitTeachback(
       }
     } else if (result.kind === "adequate" || result.kind === "question_after") {
       s.phase = "done";
-      await maybeWriteCommentary(s);
+      startCommentary(s);
       push(s, {
         role: "assistant",
         kind: "status",
@@ -1334,6 +1376,32 @@ function commentaryEvidence(s: Session): string {
     .join("\n\n");
 }
 
+/**
+ * Starts the notes rewrite without waiting for it. Nothing the reviewer does
+ * next depends on it, so the walk can end while it finishes in the background;
+ * closing the agent awaits it.
+ */
+function startCommentary(s: Session): void {
+  if (s.commentaryWritten || s.commentaryTask) return;
+  s.commentaryTask = maybeWriteCommentary(s).finally(() => {
+    s.commentaryTask = undefined;
+    persist(s);
+  });
+}
+
+/**
+ * Waits for the notes, wherever they got started. Callers that are about to
+ * close the agent have to come through here or the rewrite loses its agent
+ * mid-run.
+ */
+async function finishCommentary(s: Session): Promise<void> {
+  if (s.commentaryTask) {
+    await s.commentaryTask;
+    return;
+  }
+  await maybeWriteCommentary(s);
+}
+
 /** Private notes stay in this app's data/ folder — never the reviewed tree. */
 async function maybeWriteCommentary(s: Session): Promise<void> {
   if (s.commentaryWritten) return;
@@ -1395,7 +1463,7 @@ export async function restoreBranch(
     text: `Restore ${branch}`,
   });
   return withBusy(s, async () => {
-    await maybeWriteCommentary(s);
+    await finishCommentary(s);
     await checkoutBranch(s.repoPath, branch);
     s.phase = "done";
     s.homeRestored = true;
@@ -1761,7 +1829,7 @@ export async function quit(id: string): Promise<SessionSnapshot> {
   push(s, { role: "user", kind: "text", text: "Quit" });
   return withBusy(s, async () => {
     s.phase = "done";
-    await maybeWriteCommentary(s);
+    await finishCommentary(s);
     await s.agent?.close();
     s.agent = undefined;
     push(s, {

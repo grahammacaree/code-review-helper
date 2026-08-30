@@ -162,9 +162,20 @@ function jsAt(
 function jsEnd(lines: string[], headerIdx: number): number {
   let depth = 0;
   let seen = false;
+  // Parameters can be typed with inline objects — `opts: { max: number }` — and
+  // those braces are not the body. Nothing is counted until the parameter list
+  // closes, or such a function appears to end on its own signature.
+  let paren = 0;
+  let inParams = false;
   for (let i = headerIdx; i < lines.length; i += 1) {
     const line = lines[i].replace(/\/\/.*$/, "");
     for (const ch of line) {
+      if (!seen && (ch === "(" || ch === ")")) {
+        paren += ch === "(" ? 1 : -1;
+        inParams = paren > 0;
+        continue;
+      }
+      if (inParams) continue;
       if (ch === "{") {
         depth += 1;
         seen = true;

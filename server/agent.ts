@@ -1,6 +1,7 @@
 import { Agent, Cursor, CursorAgentError } from "@cursor/sdk";
 import { cursorApiKey, cursorModel } from "./env.js";
 import { fileDiff, githubDiffUrl, parseFocusFromDiff, readWorktreeFile } from "./git.js";
+import { excerptAround, type Excerpt } from "./excerpt.js";
 import { fileLinks, isTestPath } from "./scaffold.js";
 import type { ConceptDepth, ConceptForCard } from "./conceptMemory.js";
 import type {
@@ -24,6 +25,59 @@ type LocalAgent = Awaited<ReturnType<typeof Agent.create>>;
 
 const AGENT_DIFF_CHARS = 8_000;
 const AGENT_BODY_CHARS = 4_000;
+/** Enough of a big PR to see its shape, without paying for every path. */
+const AGENT_PATH_ROWS = 120;
+/**
+ * A chase gets excerpts rather than whole files, so these are much smaller than
+ * the diff budget: the call sites and the export's definition, and no more.
+ */
+const AGENT_CHASE_CALLER_CHARS = 3_000;
+const AGENT_CHASE_EXPORT_CHARS = 1_500;
+
+/**
+ * What one agent has already been told. Every walk runs on a single agent and
+ * `send` keeps the conversation, so material that never changes — the private
+ * notes, the PR map, a concept's framing — is worth sending once instead of on
+ * every card. It is tracked against the agent rather than the session: a
+ * replaced agent (auth failure, restart) has none of it and must be told again.
+ */
+export interface AgentPriming {
+  walkContext: boolean;
+  concepts: Set<string>;
+  /** Cards sent since the durable material last went out. */
+  cardsSince: number;
+}
+
+/**
+ * How many cards may lean on earlier context before it is sent again. A long
+ * walk with big diffs can push the opening material far enough back that the
+ * model stops weighting it, and a card written without the private notes is a
+ * worse card — so this trades a little of the saving for that not happening.
+ */
+export const REPRIME_AFTER_CARDS = 6;
+
+export function newPriming(): AgentPriming {
+  return { walkContext: false, concepts: new Set(), cardsSince: 0 };
+}
+
+/**
+ * Records what the card just sent, and decides whether the next one repeats the
+ * durable material. Call once per card, after the send.
+ */
+export function advancePriming(
+  primed: AgentPriming,
+  conceptIds: string[],
+): void {
+  if (primed.walkContext && primed.cardsSince + 1 >= REPRIME_AFTER_CARDS) {
+    primed.walkContext = false;
+    primed.concepts.clear();
+    primed.cardsSince = 0;
+    return;
+  }
+  primed.cardsSince = primed.walkContext ? primed.cardsSince + 1 : 0;
+  primed.walkContext = true;
+  for (const id of conceptIds) primed.concepts.add(id);
+}
 
 /** Shared guardrails for chat Ask and inline annotation replies during a review. */
 const REVIEW_QA_RULES = [
@@ -96,12 +150,16 @@ export async function generateOverview(opts: {
     Overview,
     "whatsHappening" | "why" | "dependencies" | "howItConnects"
   > } = {};
-  const listed = opts.files
-    .map(
-      (f) =>
-        `${f.kind}\t${f.path}${f.oldPath ? ` (from ${f.oldPath})` : ""}${f.noise ? " [noise]" : ""}${f.asset ? " [asset]" : ""}`,
-    )
-    .join("\n");
+  // An AI-sized PR can change hundreds of files. The queue is what gets walked,
+  // so the rest is context for the map and a long tail of it earns nothing.
+  const rows = opts.files.map(
+    (f) =>
+      `${f.kind}\t${f.path}${f.oldPath ? ` (from ${f.oldPath})` : ""}${f.noise ? " [noise]" : ""}${f.asset ? " [asset]" : ""}`,
+  );
+  const listed =
+    rows.length > AGENT_PATH_ROWS
+      ? `${rows.slice(0, AGENT_PATH_ROWS).join("\n")}\n…and ${rows.length - AGENT_PATH_ROWS} more changed paths`
+      : rows.join("\n");
   const body = (opts.prBody || "").trim().slice(0, AGENT_BODY_CHARS);
 
   const run = await opts.agent.send(
@@ -185,7 +243,11 @@ const DEPTH_RULE: Record<ConceptDepth, string> = {
  * reviewer learns the repo's strategy, not just the diff. Depth comes from what
  * earlier walks already taught him. Never a gate.
  */
-function conceptBlock(concepts?: ConceptForCard[]): string {
+function conceptBlock(
+  concepts?: ConceptForCard[],
+  /** Systems whose framing this agent has already been given in this walk. */
+  taught?: Set<string>,
+): string {
   if (!concepts?.length) {
     return "concept: omit unless this hunk genuinely sits on a named architectural system in this repo. Do not invent one.";
   }
@@ -196,7 +258,11 @@ function conceptBlock(concepts?: ConceptForCard[]): string {
         c.seenIn.length
           ? `Already came up in: ${c.seenIn.join(", ")}.`
           : "First checkout where it has come up.",
-        `Reference framing: ${c.teach}`,
+        // The framing is a fixed paragraph, so it is worth sending once per walk
+        // rather than on every file that touches the same system.
+        taught?.has(c.id)
+          ? "Framing for it is earlier in this conversation."
+          : `Reference framing: ${c.teach}`,
       ].join(" "),
     )
     .join("\n");
@@ -222,6 +288,12 @@ export async function generateFileCard(opts: {
   overview?: Overview;
   commentary?: CommentaryBundle;
   concepts?: ConceptForCard[];
+  /**
+   * What this agent has already been told in this walk. `send` keeps the whole
+   * conversation, so the durable material — private notes, the PR map, concept
+   * framings — is already in front of the model and does not need re-sending.
+   */
+  primed?: AgentPriming;
 }): Promise<FileCard> {
   const hunks = await fileDiff(opts.cwd, opts.baseRef, opts.entry.path, {
     context: 0,
@@ -250,17 +322,26 @@ export async function generateFileCard(opts: {
     >;
   } = {};
 
-  const overviewBits = opts.overview
-    ? [
-        `PR why: ${opts.overview.why}`,
-        `How the queued files connect: ${opts.overview.howItConnects}`,
-        opts.overview.repoNote
-          ? `Repo bias (tilt be careful notes when this file hits the seam; do not invent rules; do not add sections):\n${opts.overview.repoNote}`
+  // The map and the private notes were sent to this same agent earlier, so a
+  // primed agent gets a pointer instead of the text again.
+  const carried = opts.primed?.walkContext
+    ? "The PR map, the repo bias list, and the private notes are earlier in this conversation. Keep applying them; tilt be careful notes only where this hunk actually hits a listed seam."
+    : [
+        opts.overview
+          ? [
+              `PR why: ${opts.overview.why}`,
+              `How the queued files connect: ${opts.overview.howItConnects}`,
+              opts.overview.repoNote
+                ? `Repo bias (tilt be careful notes when this file hits the seam; do not invent rules; do not add sections):\n${opts.overview.repoNote}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join("\n")
           : "",
+        commentaryPromptBlock(opts.commentary),
       ]
         .filter(Boolean)
-        .join("\n")
-    : "";
+        .join("\n\n");
 
   const run = await opts.agent.send(
     [
@@ -268,7 +349,7 @@ export async function generateFileCard(opts: {
       "Call publish_file_card once. Stay on this file.",
       "what: concrete change. why: why this file had to change.",
       "roleInPr: one short paragraph on this file's purpose relative to the PR's stated and implicit motivation — not a repeat of what/why.",
-      conceptBlock(opts.concepts),
+      conceptBlock(opts.concepts, opts.primed?.concepts),
       "lookCloser: 0–3 named hotspots (complex/novel/central) with line ranges. Behavior pivots: if the hunk is tiny but the point is a semantic choice (wrong flag/signal would regress UX), put that symbol in lookCloser and phrase why with the wrong alternative (e.g. 'vs isFetching — pagination would flash RefreshControl') — do not leave lookCloser empty on those files.",
       "map: optional. In-file: how lookCloser pieces connect when interlocking. Sibling: when this file and another queued/covered path solve the same UX differently, 2–4 lines naming the sibling and the divergence. Omit when not useful. Styles/barrels: prefer roleInPr over inventing a layout map.",
       "couldHave: 0–2 evidenced design forks, or empty.",
@@ -276,8 +357,7 @@ export async function generateFileCard(opts: {
       opts.entry.kind === "deleted"
         ? "File was deleted; do not invent current contents."
         : "",
-      overviewBits,
-      commentaryPromptBlock(opts.commentary),
+      carried,
       `Hunks:\n${diff || "(empty diff)"}`,
       opts.covered.some((p) => isTestPath(p)) && isTestPath(opts.entry.path)
         ? "This is a later test/spec in a walk that already covered a test. If the hunk is only expected-string / assertion updates for a rename already walked, keep what/why to 1–2 sentences, leave lookCloser empty, and do not invent a new quiz. They may skip remaining same-rename tests."
@@ -382,6 +462,27 @@ export async function generateFileCard(opts: {
   };
 }
 
+/** Reads a file from the checkout and keeps only the parts about the names. */
+async function excerptFile(
+  cwd: string,
+  path: string,
+  names: string[],
+  opts: {
+    maxChars: number;
+    maxRegions?: number;
+    definitionsOnly?: boolean;
+  },
+): Promise<Excerpt | undefined> {
+  let text = "";
+  try {
+    text = await readWorktreeFile(cwd, path);
+  } catch {
+    return undefined;
+  }
+  if (!text.trim()) return undefined;
+  return excerptAround(text, path, names, opts);
+}
+
 export async function generateChaseCard(opts: {
   agent: LocalAgent;
   cwd: string;
@@ -392,25 +493,16 @@ export async function generateChaseCard(opts: {
   covered: string[];
 }): Promise<FileCard> {
   const from = opts.entry.chaseFrom || "the changed file";
-  const names = (opts.entry.chaseNames || []).join(", ") || "the changed export";
-  let caller = "";
-  try {
-    caller = await readWorktreeFile(opts.cwd, opts.entry.path);
-  } catch {
-    caller = "";
-  }
-  if (caller.length > AGENT_DIFF_CHARS) {
-    caller = `${caller.slice(0, AGENT_DIFF_CHARS)}\n…[truncated]`;
-  }
-  let source = "";
-  try {
-    source = await readWorktreeFile(opts.cwd, from);
-  } catch {
-    source = "";
-  }
-  if (source.length > 4000) {
-    source = `${source.slice(0, 4000)}\n…[truncated]`;
-  }
+  const nameList = opts.entry.chaseNames || [];
+  const names = nameList.join(", ") || "the changed export";
+  const caller = await excerptFile(opts.cwd, opts.entry.path, nameList, {
+    maxChars: AGENT_CHASE_CALLER_CHARS,
+  });
+  const source = await excerptFile(opts.cwd, from, nameList, {
+    maxChars: AGENT_CHASE_EXPORT_CHARS,
+    maxRegions: nameList.length || 1,
+    definitionsOnly: true,
+  });
   const links = fileLinks(
     opts.covered,
     opts.queue.slice(opts.index),
@@ -429,8 +521,12 @@ export async function generateChaseCard(opts: {
       "lookCloser: 0–1 hotspot with line range if you can see the import/use, else empty.",
       "uhOh: only if the new contract does not hold here; otherwise empty. Do not invent.",
       "Do not write a full what/why/role teach-back card. No couldHave. No map.",
-      source ? `Changed module (truncated):\n${source}` : "",
-      caller ? `Caller (truncated):\n${caller}` : "Could not read the caller from disk.",
+      source
+        ? `Changed module ${from} — ${source.note}:\n${source.text}`
+        : "",
+      caller
+        ? `Caller ${opts.entry.path} — ${caller.note}:\n${caller.text}`
+        : "Could not read the caller from disk.",
     ]
       .filter(Boolean)
       .join("\n\n"),
