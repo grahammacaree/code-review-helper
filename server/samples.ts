@@ -9,6 +9,7 @@ import { projectRoot } from "./env.js";
 import { dummyArgs, functionAtLine } from "./probe.js";
 import { shapeArgs, type Shaped } from "./shapes.js";
 import { balanced, escapeRe, evalLiteral } from "./strings.js";
+import { isTestPath } from "./paths.js";
 import type { ProbeArgSuggestion } from "./types.js";
 
 const execFileAsync = promisify(execFile);
@@ -362,12 +363,6 @@ async function findTestHits(
         );
   const local = await hitsInFiles(colocatedTests(repoPath, srcPath), needle);
   return uniqueHits([...local, ...scoped]);
-}
-
-function isTestPath(file: string): boolean {
-  return (
-    /\.(test|spec)\.[cm]?[jt]sx?$/.test(file) || file.includes("/__tests__/")
-  );
 }
 
 function colocatedTests(repoPath: string, srcPath: string): string[] {

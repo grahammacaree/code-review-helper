@@ -1,3 +1,4 @@
+import { isTestPath } from "./paths.js";
 import { scoreChangedFiles, RISK_PIN_SCORE } from "./risk.js";
 import type {
   FileCard,
@@ -5,6 +6,8 @@ import type {
   TeachbackResult,
   Wrapup,
 } from "./types.js";
+
+export { isTestPath };
 
 const CORE_LIMIT = 8;
 
@@ -37,7 +40,10 @@ export async function walkQueue(opts: {
     return { queue: ordered, batched: [], riskPinned: [] };
   }
 
-  const spine = ordered.slice(0, CORE_LIMIT);
+  // Product first: a polish PR often touches many harness files that sort
+  // early (test-utils matches "util") and would eat the whole spine. Tests
+  // stay reachable via Walk all or Skip-remaining-tests, not as Core only.
+  const spine = coreSpine(ordered);
   const hits = await scoreChangedFiles({
     repoPath: opts.repoPath,
     baseRef: opts.baseRef,
@@ -52,6 +58,18 @@ export async function walkQueue(opts: {
   const queued = new Set(queue);
   const batched = ordered.filter((p) => !queued.has(p));
   return { queue, batched, riskPinned };
+}
+
+/**
+ * The Core-only shortlist: product paths first, harness only when that is
+ * all the PR has. Risk pins are appended later by walkQueue.
+ */
+export function coreSpine(
+  ordered: string[],
+  limit = CORE_LIMIT,
+): string[] {
+  const product = ordered.filter((p) => !isTestPath(p));
+  return (product.length ? product : ordered).slice(0, limit);
 }
 
 export function assetsNote(files: FileEntry[]): string | undefined {
@@ -115,11 +133,6 @@ export function looksLikeQuestion(text: string): boolean {
   return /^(do we|do you|does |is there|are there|can we|could we|should we|how do|how does|what if|where is|where's)\b/i.test(
     trimmed,
   );
-}
-
-export function isTestPath(path: string): boolean {
-  const p = path.toLowerCase();
-  return /\.(test|spec)\./.test(p) || /(^|\/)(__tests__|tests?|spec)\//.test(p);
 }
 
 export function pendingTestPaths(

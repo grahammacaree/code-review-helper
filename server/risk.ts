@@ -1,4 +1,5 @@
 import { diffNumstat, fileDiff } from "./git.js";
+import { isTestPath } from "./paths.js";
 import type { FileEntry } from "./types.js";
 
 export const RISK_PIN_SCORE = 8;
@@ -134,13 +135,6 @@ function scoreDiff(diff: string): { score: number; reasons: string[] } {
     }
   }
   return { score, reasons };
-}
-
-function isTestPath(path: string): boolean {
-  return (
-    /\.(test|spec)\./.test(path) ||
-    /(^|\/)(__tests__|tests?|spec)\//.test(path)
-  );
 }
 
 function unique(items: string[]): string[] {

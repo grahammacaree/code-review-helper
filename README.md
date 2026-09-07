@@ -92,7 +92,7 @@ Paste a PR URL or say **walk me through this PR** / **pr-file-walkthrough**. Dir
 
 In **Claude Code, Codex, or similar**: you are already in an agent. Copy `SKILL.md` and `templates.md` into project instructions, or `@`-include them when you review. Open the PR’s clone as the workspace. Same gates: clean tree, checkout, overview, one file, teach-back. You will not get the two-column UI, private `data/commentary/` notes, or the app’s Chase insert — those are app-only. The agent’s own backend is what you pay.
 
-If the PR is large (≥ 20 files or ≥ 1500 lines of real churn, ignoring lockfiles/generated/images), the walk stops and asks **quit**, **core only** (about 8 load-bearing files, plus any other changed files whose diffs look high-risk — the queue may grow), or **walk all**. That is for AI-sized diffs: forcing every generated file would recreate the glaze. Core-only is not a shortcut past understanding the spine or past obvious foot-guns. When you finish or quit, it offers to put you back on the branch you started from.
+If the PR is large (≥ 20 files or ≥ 1500 lines of real churn, ignoring lockfiles/generated/images), the walk stops and asks **quit**, **core only** (about 8 load-bearing **product** files — specs and test harness are batched unless the PR is harness-only — plus any other changed files whose diffs look high-risk; the queue may grow), or **walk all**. That is for AI-sized diffs: forcing every generated file would recreate the glaze. Core-only is not a shortcut past understanding the spine or past obvious foot-guns. When you finish or quit, it offers to put you back on the branch you started from.
 
 New SVGs, jpgs, and other pure assets are listed once and skipped. No teach-back on “what is an SVG.”
 
@@ -195,6 +195,7 @@ Delete `data/` and `.env` if you want a clean slate. `New walkthrough` starts a 
 | `server/probe.ts`                   | Finds the function under the cursor; runs it — or your sandbox edit — in a scratch harness                            |
 | `server/samples.ts`                 | The argument ladder: test calls, typed fixtures, fixture builders, real call sites                                    |
 | `server/shapes.ts`                  | Last rung of that ladder: builds a value from the parameter's own type, following local imports                       |
+| `server/paths.ts`                   | Shared path classifiers (`isTestPath`) used by queue ranking, risk pins, and sampling                                 |
 | `server/excerpt.ts`                 | Cuts a file down to the call sites or definition of a name, for chase prompts                                         |
 | `server/wiring.ts`                  | Import/export graph among **walk** files; `findOutsideImporters` for opt-in chase                                    |
 | `server/repoLens.ts`                | Checkout kind + doc/stack Watch for (overview + be-careful bias)                                                          |
@@ -210,6 +211,7 @@ Delete `data/` and `.env` if you want a clean slate. `New walkthrough` starts a 
 | `web/src/components/WalkView.tsx`   | The two-column walk surface; owns pane state only, so app and design mode cannot drift                                |
 | `web/src/design/`                   | Design mode: fixture states (`fixtures.ts`), the switcher (`DesignMode.tsx`), headless check (`smoke.tsx`)            |
 | `checks/parse.ts`                   | `npm run check:parse` — the function-finding and excerpting passes, on inline fixtures                                 |
+| `checks/queue.ts`                   | `npm run check:queue` — core-only spine prefers product over test harness                                              |
 | `docs/token-efficiency.md`          | What each prompt sends and why, with measurements — read before adding a prompt                                        |
 
 
