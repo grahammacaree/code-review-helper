@@ -535,6 +535,7 @@ export const SCENARIOS: Scenario[] = [
         {
           path: "apps/atlas-network-tidewater/src/follows/utils/follow-server.utils.ts",
           names: ["valueFromSettledPromise"],
+          via: "resolved",
         },
       ],
       messages: FILE_MSGS,

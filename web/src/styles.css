@@ -826,6 +826,14 @@ button.tab.current .octicon {
   background: var(--bg);
 }
 
+/* Docs and other prose: keep line numbers, but wrap so a paragraph is not cut
+   off at the pane edge. Code stays pre (horizontal scroll) so columns line up. */
+.code.wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
+}
+
 .code [data-line] {
   display: block;
   position: relative;

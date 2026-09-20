@@ -29,7 +29,7 @@ It has not escaped my notice that this tooling can also be used to interrogate m
 
 **Code is connected.** A diff line in isolation rarely tells the story. Changes propagate through call chains, imports and exports, shared types, config, and the PR’s stated goal. Good review is systems thinking: how this file serves the whole change, who calls what, what broke if this assumption is wrong. Tools should foreground that connectivity — map before file-by-file, role in the PR, wiring between paths — not encourage file-at-a-time amnesia.
 
-**Amplify, don't replace.** AI tooling is good at shortcuts: summarize diffs, flag patterns, skip to “looks fine.” Shortcuts save time, but they can also train you out of the work that reviews are for. Useful assistants **prepare** (map the change set, order files by dependency, surface how pieces connect, flag evidence-backed risks), **structure** (one file at a time with links back to the queue and the overview), and **support** (answer questions, export notes for the real GitHub review). They should not **substitute** for understanding or for the act of approving.
+**Amplify, don't replace.** AI tooling is good at shortcuts: summarize diffs, flag patterns, skip to “looks fine.” Shortcuts save time, but they can also train you out of the work that reviews are for. Useful assistants **prepare** (map the change set, order files by dependency, surface how pieces connect, flag evidence-backed risks), **structure** (one file at a time with links back to the queue and the overview), and **support** (answer questions, export notes for the real GitHub review). They should not **substitute** for understanding or for the act of approving. Where the host needs a *decision* rather than prose — teach-back grade, core spine, chase rank, import bind — it asks [TypeSafe](https://typesafe.ai)’s System One model **Jev** instead of another long agent turn; see [Typed judgments with TypeSafe (Jev)](docs/typesafe-judgments.md).
 
 **Keep the human on the hook.** The model can propose; the reviewer still paraphrases, prioritizes, and signs off. Gates that block “lgtm” without explanation, separation of defect-hunting from the walk, and notes that feed into an official review — all of that keeps AI in a collaborator role rather than an autopilot.
 
@@ -37,7 +37,7 @@ It has not escaped my notice that this tooling can also be used to interrogate m
 
 **Two postures, one walk.** On a system I already own, the walk should lean into the seams that actually matter (error isolation, cache invalidation on a website). On a system I am catching up on, that same attention should go to the teachable big picture: what kind of app this is, how data and failures move — not a pile of local trivia. Checkout kind (mobile / website / backend) plus docs like `AGENTS.md` supply a short Watch for list — kind-level questions at the seam, not invented house law. In the app, `user.md` is craft notes about the reviewer; `repos/<origin>.md` is a **map of that checkout** that each walk expands; `general.md` is best-practice commentary you write by hand (walks do not overwrite it). The **Repo** overview block is still stack/docs Watch for.
 
-**Blast radius lives outside the diff.** A bugfix can break callers the PR never touched. The parsed wiring graph stays inside queued + covered files so the walk stays teachable. “No importers in walk scope” means none *in this walk*, not unused in the product. Unchanged callers of a changed contract are still in play: the app can **insert a thin chase card** when you opt in (Wiring tab or a chip) — a few paths after the current file, no chase-on-chase, skip / done looking is enough. The skill offers the same chase in chat. Neither surface auto-queues the rest of the repo.
+**Blast radius lives outside the diff.** A bugfix can break callers the PR never touched. The parsed wiring graph stays inside queued + covered files so the walk stays teachable. “No importers in walk scope” means none *in this walk*, not unused in the product. Unchanged callers of a changed contract are still in play: discovery follows tsconfig aliases, symbol matches, and one barrel re-export hop, then TypeSafe ranks/binds when the key is set. The app can **insert a thin chase card** when you opt in (Wiring tab’s Outside this walk list, or a chip) — a few paths after the current file, no chase-on-chase, skip / done looking is enough. The skill offers the same chase in chat. Neither surface auto-queues the rest of the repo.
 
 ## Why this shape
 
@@ -108,7 +108,7 @@ cd code-review-helper
 cp .env.example .env
 ```
 
-Put a user key from [Cursor Dashboard → API Keys](https://cursor.com/dashboard/api) in `.env` as `CURSOR_API_KEY`. Optional: `CURSOR_MODEL` (default `composer-2.5`), `PORT` (default `8787`).
+Put a user key from [Cursor Dashboard → API Keys](https://cursor.com/dashboard/api) in `.env` as `CURSOR_API_KEY`. Optional: `CURSOR_MODEL` (default `composer-2.5`), `PORT` (default `8787`), and `TYPESAFE_API_KEY` so [TypeSafe / Jev](docs/typesafe-judgments.md) can run the typed judgment doors (not required to walk — without it those gates fall back).
 
 ```bash
 npm install
@@ -196,8 +196,11 @@ Delete `data/` and `.env` if you want a clean slate. `New walkthrough` starts a 
 | `server/samples.ts`                 | The argument ladder: test calls, typed fixtures, fixture builders, real call sites                                    |
 | `server/shapes.ts`                  | Last rung of that ladder: builds a value from the parameter's own type, following local imports                       |
 | `server/paths.ts`                   | Shared path classifiers (`isTestPath`) used by queue ranking, risk pins, and sampling                                 |
+| `server/typesafe.ts`                | TypeSafe System One client; judgments return undefined when the key is missing or confidence is low                     |
+| `server/judgments/`                 | Teach-back, intent, core rank, busywork, chase rank, bind, claim verify, concept pick — Cursor stays for prose         |
+| `server/aliases.ts`                 | tsconfig/jsconfig `paths` + `baseUrl` so outside-caller search resolves `@/`-style imports                             |
 | `server/excerpt.ts`                 | Cuts a file down to the call sites or definition of a name, for chase prompts                                         |
-| `server/wiring.ts`                  | Import/export graph among **walk** files; `findOutsideImporters` for opt-in chase                                    |
+| `server/wiring.ts`                  | Walk-scope import/export graph; `findOutsideImporters` (alias + symbol grep + one barrel hop + TypeSafe bind)          |
 | `server/repoLens.ts`                | Checkout kind + doc/stack Watch for (overview + be-careful bias)                                                          |
 | `server/concepts.ts`                | Which architectural systems this checkout runs on + the staff-level framing taught when a hunk hits that seam         |
 | `server/conceptMemory.ts`           | Per-system exposure ledger; picks scaffold / build / deepen for the Concept beat                                      |
@@ -212,7 +215,10 @@ Delete `data/` and `.env` if you want a clean slate. `New walkthrough` starts a 
 | `web/src/design/`                   | Design mode: fixture states (`fixtures.ts`), the switcher (`DesignMode.tsx`), headless check (`smoke.tsx`)            |
 | `checks/parse.ts`                   | `npm run check:parse` — the function-finding and excerpting passes, on inline fixtures                                 |
 | `checks/queue.ts`                   | `npm run check:queue` — core-only spine prefers product over test harness                                              |
+| `checks/wiring.ts`                  | `npm run check:wiring` — alias resolve + outside importers (no live API)                                               |
+| `checks/typesafe-smoke.ts`          | `npm run check:typesafe` — live Choice/Noul/Score smoke (needs `TYPESAFE_API_KEY`)                                     |
 | `docs/token-efficiency.md`          | What each prompt sends and why, with measurements — read before adding a prompt                                        |
+| `docs/typesafe-judgments.md`        | TypeSafe / **Jev** shoutout + every judgment door (teach-back, chase, bind, …)                                         |
 
 
 In Cursor the skill id is `pr-file-walkthrough` so existing triggers keep working. This repo is named `code-review-helper`.

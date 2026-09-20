@@ -47,10 +47,11 @@ export function WiringPane({
         </ul>
       )}
       <p className="muted wiring-foot">
-        Consumers listed here are other queued or covered files in this walk.
-        Unchanged callers live outside this graph.
+        Consumers under Out of this file are other queued or covered files in
+        this walk. Outside this walk lists unchanged callers elsewhere in the
+        checkout (aliases and one barrel hop included) — Chase opens a thin card.
       </p>
-      {chaseCandidates && chaseCandidates.length > 0 && onChase && (
+      {chaseCandidates && chaseCandidates.length > 0 && (
         <>
           <h3>Outside this walk</h3>
           <ul className="wiring-list">
@@ -64,15 +65,20 @@ export function WiringPane({
                     <code>{n}</code>
                   </span>
                 ))}
-                <button
-                  type="button"
-                  className="secondary chase-btn"
-                  disabled={disabled}
-                  aria-label={`Chase ${c.path}`}
-                  onClick={() => onChase(c.path)}
-                >
-                  Chase
-                </button>
+                {c.via === "barrel" && c.from ? (
+                  <span className="muted"> via {shortPath(c.from)}</span>
+                ) : null}
+                {onChase ? (
+                  <button
+                    type="button"
+                    className="secondary chase-btn"
+                    disabled={disabled}
+                    aria-label={`Chase ${c.path}`}
+                    onClick={() => onChase(c.path)}
+                  >
+                    Chase
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>

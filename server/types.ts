@@ -97,6 +97,8 @@ export interface FileCard {
 export interface ChaseCandidate {
   path: string;
   names: string[];
+  via?: "resolved" | "bound" | "barrel";
+  from?: string;
 }
 
 export interface Wrapup {

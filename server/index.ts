@@ -1,6 +1,6 @@
 import express from "express";
 import { authStatus } from "./agent.js";
-import { cursorApiKey, serverPort } from "./env.js";
+import { cursorApiKey, serverPort, typesafeApiKey } from "./env.js";
 import {
   chooseLarge,
   continueAfterQuestion,
@@ -40,6 +40,7 @@ app.get("/api/auth", async (_req, res) => {
   res.json({
     ...status,
     hasKey: Boolean(cursorApiKey()),
+    hasTypesafeKey: Boolean(typesafeApiKey()),
   });
 });
 

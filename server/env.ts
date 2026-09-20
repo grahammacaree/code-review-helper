@@ -14,6 +14,12 @@ export function cursorApiKey(): string | undefined {
   return key || undefined;
 }
 
+/** TypeSafe System One (Jev). Undefined until set — features that need it stay off. */
+export function typesafeApiKey(): string | undefined {
+  const key = process.env.TYPESAFE_API_KEY?.trim();
+  return key || undefined;
+}
+
 export function cursorModel(): string {
   return process.env.CURSOR_MODEL?.trim() || "composer-2.5";
 }

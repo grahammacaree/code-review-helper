@@ -87,7 +87,7 @@ import type {
   SessionSnapshot,
   TeachbackResult,
 } from "./types.js";
-import { analyzeFileWiring, buildImportIndex, findOutsideImporters, formatWiringNote } from "./wiring.js";
+import { analyzeFileWiring, buildImportIndex, findOutsideImporters, formatWiringNote, MAX_CHASE_OFFER } from "./wiring.js";
 import type { WiringImport } from "./wiring.js";
 
 type LocalAgent = Awaited<ReturnType<typeof createReviewAgent>>;
@@ -362,13 +362,22 @@ async function computeFileWiring(s: Session): Promise<FileWiring | undefined> {
       .map((exp) => exp.name);
     if (names.length) {
       try {
-        s.chaseCandidates = await findOutsideImporters({
+        const found = await findOutsideImporters({
           repoPath: s.repoPath,
           targetPath: s.card.path,
           exportNames: names,
           exclude: new Set(wiringScope(s)),
           signal: signalOf(s),
         });
+        const { rankChaseCandidates } = await import("./judgments/chase.js");
+        const ranked = await rankChaseCandidates({
+          targetPath: s.card.path,
+          exportNames: names,
+          contractHint: [s.card.what, s.card.why].filter(Boolean).join(" — "),
+          candidates: found,
+          limit: MAX_CHASE_OFFER,
+        });
+        s.chaseCandidates = ranked ?? found.slice(0, MAX_CHASE_OFFER);
       } catch {
         s.chaseCandidates = [];
       }
@@ -630,6 +639,8 @@ async function runOverview(s: Session, mode: "all" | "core"): Promise<void> {
     repoPath: s.repoPath,
     baseRef: s.baseRef || "main",
     signal: signalOf(s),
+    prTitle: s.prTitle,
+    prBody: s.prBody,
   });
   throwIfAborted(s);
   s.workingOn = "Mapping the PR…";
@@ -756,8 +767,26 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
   if (!entry) throw new Error(`Unknown queued file: ${path}`);
   s.workingOn = `Writing file card ${index + 1}/${s.queue.length}…`;
   const commentary = await ensureCommentary(s);
-  const concepts = entry.chase ? [] : await conceptsForCard(s, path);
-  const card = entry.chase
+  let concepts = entry.chase ? [] : await conceptsForCard(s, path);
+  let peekDiff = "";
+  try {
+    peekDiff = await fileDiff(s.repoPath, s.baseRef || "main", path, {
+      context: 2,
+      maxChars: 4_000,
+    });
+  } catch {
+    peekDiff = "";
+  }
+  if (concepts.length > 1) {
+    const { pickPrimaryConcept } = await import("./judgments/concept.js");
+    const picked = await pickPrimaryConcept({
+      path,
+      concepts,
+      evidence: peekDiff,
+    });
+    if (picked) concepts = picked.slice(0, 1);
+  }
+  let card = entry.chase
     ? await withAgent(s, (agent) =>
         generateChaseCard({
           agent,
@@ -792,7 +821,7 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
   s.card = card;
   s.phase = "file";
   try {
-    s.diffText = await fileDiff(s.repoPath, s.baseRef || "main", path);
+    s.diffText = peekDiff || (await fileDiff(s.repoPath, s.baseRef || "main", path));
   } catch {
     s.diffText = undefined;
   }
@@ -805,6 +834,17 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
       s.fileText = await readWorktreeFile(s.repoPath, path);
     } catch {
       s.fileText = "// Could not read this path from HEAD.";
+    }
+    if (!entry.chase && (card.lookCloser.length || card.uhOh.length)) {
+      const { verifyCardClaims } = await import("./judgments/verify.js");
+      const trimmed = await verifyCardClaims({
+        card,
+        evidence: s.diffText || s.fileText || "",
+      });
+      if (trimmed) {
+        card = trimmed;
+        s.card = card;
+      }
     }
     s.fileWiring = await computeFileWiring(s);
     s.focusLine =
@@ -897,9 +937,24 @@ export async function submitTeachback(
   }
 
   if (s.phase === "file" && s.card) {
-    const intent = skipIntent(trimmed, {
-      pendingTests: pendingTestPaths(s.queue, s.covered).length,
-    });
+    const pendingTests = pendingTestPaths(s.queue, s.covered).length;
+    let intent = skipIntent(trimmed, { pendingTests });
+    if (!intent) {
+      const { classifyCommandIntent } = await import("./judgments/intent.js");
+      const guessed = await classifyCommandIntent({
+        text: trimmed,
+        phase: "file",
+        pendingTests,
+        askMode: false,
+      });
+      if (guessed === "question") {
+        return withBusy(s, () => replyToQuestion(s, trimmed));
+      }
+      if (guessed === "this" || guessed === "busywork" || guessed === "rest") {
+        intent = guessed;
+      }
+      // teachback / unknown → fall through to grading
+    }
     if (intent === "this") {
       return skipCurrentFile(s, { alreadyPushed: true });
     }
@@ -912,15 +967,24 @@ export async function submitTeachback(
   }
 
   return withBusy(s, async () => {
+    const stage = s.phase === "wrapup" ? "wrapup" : "file";
+    const prior = priorParaphrases(s);
+    const { gradeTeachbackTypesafe } = await import("./judgments/teachback.js");
     const result =
       localThinTeachback(trimmed) ??
+      (await gradeTeachbackTypesafe({
+        text: trimmed,
+        stage,
+        card: s.card,
+        prior,
+      })) ??
       (await withAgent(s, (agent) =>
         gradeTeachback({
           agent,
           text: trimmed,
-          stage: s.phase === "wrapup" ? "wrapup" : "file",
+          stage,
           card: s.card,
-          prior: priorParaphrases(s),
+          prior,
         }),
       ));
     s.teachback = result;
@@ -1128,7 +1192,16 @@ async function skipBusyworkFiles(
   if (s.phase !== "file" || !s.card) {
     throw new Error("No file to skip.");
   }
-  const paths = busyworkPaths(s);
+  let paths = busyworkPaths(s);
+  const { filterBusyworkPaths } = await import("./judgments/busywork.js");
+  const filtered = await filterBusyworkPaths({
+    pending: paths,
+    covered: s.covered,
+    paraphrases: s.paraphrases,
+  });
+  // When TypeSafe narrows the list, prefer that; if it returns nothing useful,
+  // keep the path heuristic (all pending tests).
+  if (filtered?.length) paths = filtered;
   if (!paths.length) {
     if (!opts.alreadyPushed) {
       throw new Error("No remaining test files to skip.");

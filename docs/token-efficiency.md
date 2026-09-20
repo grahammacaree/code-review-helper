@@ -61,3 +61,11 @@ Fewer tokens usually means a faster card, but two of these are purely about wait
 3. Take the section of the private notes your prompt uses, not the bundle.
 4. Measure the assembled prompt before and after. A percentage without a measurement is a guess.
 5. Cache anything a reviewer can trigger repeatedly, and give them an explicit way to bypass the cache.
+
+## Typed judgments (TypeSafe / Jev)
+
+**Shoutout:** the judgment layer exists because [TypeSafe](https://typesafe.ai)’s System One model **Jev** turns small semantic questions into typed Choice / Noul / Score answers code can threshold. Full write-up (doors, outside-caller split, credit): [typesafe-judgments.md](./typesafe-judgments.md).
+
+Some walk gates need a decision, not prose: teach-back kind, skip intent, which files are core, which pending tests are busywork, which outside callers are worth chasing, whether an ambiguous import binds to the changed module, whether a Look closer / Be careful claim is supported by the hunk, and which concept to teach when several seams match. Those run on Jev when `TYPESAFE_API_KEY` is set, with confidence floors. Uncertain or missing-key answers fall back to the Cursor agent (or the previous heuristic). File cards, Q&A, and commentary stay on Cursor.
+
+Outside-caller discovery itself is code-first (`findOutsideImporters`: tsconfig aliases, symbol+stem grep, one barrel hop); TypeSafe only ranks/binds after candidates exist. See `server/judgments/`, `npm run check:wiring`, and `npm run check:typesafe`.

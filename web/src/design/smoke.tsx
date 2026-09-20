@@ -1,5 +1,7 @@
 import React from "react";
 import { renderToString } from "react-dom/server";
+import { DiffPane } from "../components/DiffPane";
+import { FilePane } from "../components/FilePane";
 import { Sandbox } from "../components/Sandbox";
 import { functionAtLine } from "../functionAtLine";
 import { WalkView, type WalkActions } from "../components/WalkView";
@@ -279,6 +281,52 @@ for (const s of SCENARIOS) {
         );
       }
     }
+  }
+}
+
+// Documentation is prose: long lines must wrap in the file pane, not scroll
+// sideways off the column. Code keeps the default pre (no wrap) so columns line up.
+{
+  const shared = {
+    kind: "modified",
+    focus: [] as [],
+    lookCloser: [] as [],
+    uhOh: [] as [],
+    annotations: [] as [],
+    onSelect: () => undefined,
+    onFunction: () => undefined,
+    onLookCloser: () => undefined,
+  };
+  const md = renderToString(
+    <FilePane
+      {...shared}
+      path="documentation/docs/modules/onboarding.md"
+      text={"# Onboarding\n\n" + "word ".repeat(80)}
+    />,
+  );
+  const ts = renderToString(
+    <FilePane
+      {...shared}
+      path="src/app/_layout.tsx"
+      text={"export function Root() {}\n"}
+    />,
+  );
+  if (!md.includes('class="code wrap"')) {
+    fail("prose-wrap", "markdown file pane is missing the wrap class");
+  }
+  if (ts.includes("code wrap")) {
+    fail("prose-wrap", "TypeScript file pane should not wrap");
+  }
+  const diff = renderToString(
+    <DiffPane
+      path="docs/guide.md"
+      diff={
+        "@@ -1,1 +1,1 @@\n-" + "old ".repeat(40) + "\n+" + "new ".repeat(40)
+      }
+    />,
+  );
+  if (!diff.includes('class="code diff wrap"')) {
+    fail("prose-wrap", "markdown diff pane is missing the wrap class");
   }
 }
 

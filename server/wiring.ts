@@ -1,5 +1,12 @@
 import { dirname, join } from "node:path";
+import {
+  loadAliasMap,
+  normalizeModulePath,
+  resolveAliasCandidates,
+  type AliasMap,
+} from "./aliases.js";
 import { gitGrepFiles, readWorktreeFile } from "./git.js";
+import { escapeRe } from "./strings.js";
 
 /** Static import/export graph for one file within a PR walk scope. */
 export type WiringSymbolKind =
@@ -33,6 +40,7 @@ export interface FileWiring {
 }
 
 const CODE_PATH = /\.(tsx?|jsx?|mjs|cjs)$/i;
+const CODE_GLOBS = ["*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs"];
 
 export function isWiringCodePath(path: string): boolean {
   return CODE_PATH.test(path);
@@ -64,9 +72,10 @@ export async function analyzeFileWiring(opts: {
     };
   }
 
+  const aliases = await loadAliasMap(opts.repoPath);
   const known = new Set(opts.scopePaths);
   known.add(opts.path);
-  const imports = parseImports(text, opts.path, known);
+  const imports = parseImports(text, opts.path, known, aliases);
   const exports = parseExports(text);
 
   const index =
@@ -75,6 +84,7 @@ export async function analyzeFileWiring(opts: {
       repoPath: opts.repoPath,
       scopePaths: opts.scopePaths,
       known,
+      aliases,
       preload: new Map([[opts.path, text]]),
     }));
 
@@ -92,8 +102,10 @@ export async function buildImportIndex(opts: {
   repoPath: string;
   scopePaths: string[];
   known: Set<string>;
+  aliases?: AliasMap;
   preload?: Map<string, string>;
 }): Promise<Map<string, WiringImport[]>> {
+  const aliases = opts.aliases ?? (await loadAliasMap(opts.repoPath));
   const codePaths = opts.scopePaths.filter(isWiringCodePath);
   const cache = new Map(opts.preload);
   await Promise.all(
@@ -111,7 +123,7 @@ export async function buildImportIndex(opts: {
   for (const path of codePaths) {
     const text = cache.get(path);
     if (!text) continue;
-    index.set(path, parseImports(text, path, opts.known));
+    index.set(path, parseImports(text, path, opts.known, aliases));
   }
   return index;
 }
@@ -149,14 +161,21 @@ export function formatWiringNote(w: FileWiring): string | undefined {
 export interface OutsideImporter {
   path: string;
   names: string[];
+  /** How the binding was established. */
+  via?: "resolved" | "bound" | "barrel";
+  from?: string;
 }
 
-const MAX_CHASE_GREP = 80;
-const MAX_CHASE_HITS = 3;
+const MAX_CHASE_GREP = 120;
+/** How many outside importers to collect before TypeSafe ranks the offer. */
+const MAX_CHASE_CANDIDATES = 20;
+/** Default offer size when ranking is off or declines. */
+export const MAX_CHASE_OFFER = 3;
 
 /**
  * Unchanged files (outside walk scope) that import this module.
- * Used to offer an opt-in chase, not to expand the default wiring graph.
+ * Greps export *symbols* and the module stem, resolves `@/` aliases, and
+ * follows one barrel re-export hop. Used for opt-in chase + Wiring "outside".
  */
 export async function findOutsideImporters(opts: {
   repoPath: string;
@@ -164,28 +183,40 @@ export async function findOutsideImporters(opts: {
   exportNames: string[];
   exclude: Set<string>;
   signal?: AbortSignal;
+  /** Cap on returned importers (default 20 — rank down to 3 for the chip). */
+  limit?: number;
 }): Promise<OutsideImporter[]> {
   if (!isWiringCodePath(opts.targetPath) || opts.exportNames.length === 0) {
     return [];
   }
-  const stem = importStem(opts.targetPath);
-  if (!stem) return [];
-  const escaped = stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const hits = (
-    await gitGrepFiles(
+  const limit = opts.limit ?? MAX_CHASE_CANDIDATES;
+  const aliases = await loadAliasMap(opts.repoPath);
+  const targetNorm = normalizeModulePath(opts.targetPath);
+  const exportSet = new Set(opts.exportNames.filter((n) => n !== "default"));
+
+  const patterns = searchPatterns(opts.targetPath, opts.exportNames);
+  const hitSet = new Set<string>();
+  for (const pattern of patterns) {
+    const hits = await gitGrepFiles(
       opts.repoPath,
-      escaped,
-      ["*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs"],
+      pattern,
+      CODE_GLOBS,
       opts.signal,
-    )
-  ).slice(0, MAX_CHASE_GREP);
+    );
+    for (const h of hits.slice(0, MAX_CHASE_GREP)) hitSet.add(h);
+  }
 
   const known = new Set([opts.targetPath]);
-  const exportSet = new Set(opts.exportNames);
   const out: OutsideImporter[] = [];
+  const barrels: { path: string; names: string[] }[] = [];
+  const ambiguous: {
+    path: string;
+    from: string;
+    names: string[];
+    resolvedPath?: string;
+  }[] = [];
 
-  for (const path of hits) {
-    if (out.length >= MAX_CHASE_HITS) break;
+  for (const path of hitSet) {
     if (path === opts.targetPath || opts.exclude.has(path)) continue;
     if (!isWiringCodePath(path)) continue;
     let text: string;
@@ -194,23 +225,174 @@ export async function findOutsideImporters(opts: {
     } catch {
       continue;
     }
-    const imports = parseImports(text, path, known);
+    const imports = parseImports(text, path, known, aliases);
     const names = new Set<string>();
+    let via: OutsideImporter["via"] = "resolved";
+    let fromSpec: string | undefined;
+
     for (const imp of imports) {
-      if (!imp.resolvedPath || !pathsMatch(imp.resolvedPath, opts.targetPath)) {
-        continue;
-      }
-      for (const n of imp.names) {
-        if (n === "*") {
-          for (const exp of opts.exportNames) names.add(exp);
-        } else if (exportSet.has(n) || n === "default") {
-          names.add(n);
+      const bound = bindsToTarget(imp, targetNorm);
+      if (bound === "yes") {
+        for (const n of imp.names) {
+          if (n === "*") {
+            for (const exp of opts.exportNames) names.add(exp);
+          } else if (exportSet.has(n) || n === "default") {
+            names.add(n);
+          }
+        }
+        fromSpec = imp.from;
+      } else if (bound === "maybe") {
+        const overlap = imp.names.filter(
+          (n) => n === "*" || exportSet.has(n) || n === "default",
+        );
+        if (overlap.length) {
+          ambiguous.push({
+            path,
+            from: imp.from,
+            names: overlap.includes("*") ? [...opts.exportNames] : overlap,
+            resolvedPath: imp.resolvedPath,
+          });
         }
       }
     }
-    if (names.size) out.push({ path, names: [...names] });
+
+    // One hop: this file re-exports our symbols from a path that binds to us.
+    const reexports = parseReexports(text);
+    for (const re of reexports) {
+      const fake: WiringImport = {
+        names: re.names,
+        from: re.from,
+        resolvedPath: resolveSpec(path, re.from, known, aliases),
+        external: !re.from.startsWith("."),
+        line: re.line,
+      };
+      if (bindsToTarget(fake, targetNorm) === "yes") {
+        const exported = re.names.includes("*")
+          ? [...opts.exportNames]
+          : re.names.filter((n) => exportSet.has(n) || n === "default");
+        if (exported.length) {
+          barrels.push({ path, names: exported });
+        }
+      }
+    }
+
+    if (names.size) {
+      out.push({
+        path,
+        names: [...names],
+        via,
+        from: fromSpec,
+      });
+    }
   }
-  return out;
+
+  // Second wave: who imports the barrels that re-export us?
+  for (const barrel of barrels.slice(0, 6)) {
+    if (out.length >= limit) break;
+    const stem = importStem(barrel.path);
+    const hits = await gitGrepFiles(
+      opts.repoPath,
+      wordPattern(stem),
+      CODE_GLOBS,
+      opts.signal,
+    );
+    for (const path of hits.slice(0, 40)) {
+      if (out.length >= limit) break;
+      if (
+        path === opts.targetPath ||
+        path === barrel.path ||
+        opts.exclude.has(path) ||
+        out.some((o) => o.path === path)
+      ) {
+        continue;
+      }
+      if (!isWiringCodePath(path)) continue;
+      let text: string;
+      try {
+        text = await readWorktreeFile(opts.repoPath, path);
+      } catch {
+        continue;
+      }
+      const imports = parseImports(text, path, known, aliases);
+      const names = new Set<string>();
+      for (const imp of imports) {
+        if (bindsToTarget(imp, normalizeModulePath(barrel.path)) !== "yes") {
+          continue;
+        }
+        for (const n of imp.names) {
+          if (n === "*" || barrel.names.includes(n)) {
+            for (const exp of barrel.names) names.add(exp);
+          }
+        }
+      }
+      if (names.size) {
+        out.push({
+          path,
+          names: [...names],
+          via: "barrel",
+          from: barrel.path,
+        });
+      }
+    }
+  }
+
+  // TypeSafe bind for ambiguous alias / same-name hits.
+  if (ambiguous.length && out.length < limit) {
+    const { bindOutsideImports } = await import("./judgments/bind.js");
+    const bound = await bindOutsideImports({
+      targetPath: opts.targetPath,
+      exportNames: opts.exportNames,
+      ambiguous,
+    });
+    if (bound) {
+      for (const b of bound) {
+        if (out.some((o) => o.path === b.path)) continue;
+        out.push({
+          path: b.path,
+          names: b.names,
+          via: "bound",
+          from: b.from,
+        });
+      }
+    }
+  }
+
+  return out.slice(0, limit);
+}
+
+function searchPatterns(targetPath: string, exportNames: string[]): string[] {
+  const patterns = new Set<string>();
+  const stem = importStem(targetPath);
+  if (stem) patterns.add(wordPattern(stem));
+  for (const name of exportNames) {
+    if (name === "default" || name.length < 2) continue;
+    patterns.add(wordPattern(name));
+  }
+  return [...patterns].slice(0, 8);
+}
+
+/** POSIX ERE word edge — git grep has no \\b. */
+function wordPattern(needle: string): string {
+  const edge = "[^A-Za-z0-9_$]";
+  return `(^|${edge})${escapeRe(needle)}(${edge}|$)`;
+}
+
+function bindsToTarget(
+  imp: WiringImport,
+  targetNorm: string,
+): "yes" | "no" | "maybe" {
+  if (
+    imp.resolvedPath &&
+    normalizeModulePath(imp.resolvedPath) === targetNorm
+  ) {
+    return "yes";
+  }
+  if (imp.from.startsWith(".")) return "no";
+  // Bare package (react, lodash) — not our module.
+  if (!imp.from.startsWith("@") && !imp.from.includes("/")) return "no";
+  // Alias or deep path that did not resolve to the target — may still be a
+  // barrel or an undeclared path mapping.
+  return "maybe";
 }
 
 function importStem(path: string): string {
@@ -232,7 +414,7 @@ function consumersFromIndex(
   for (const [path, imports] of index) {
     if (path === targetPath) continue;
     for (const imp of imports) {
-      if (imp.external || !imp.resolvedPath) continue;
+      if (!imp.resolvedPath) continue;
       if (!pathsMatch(imp.resolvedPath, targetPath)) continue;
       for (const name of imp.names) {
         const key = name === "*" ? "default" : name;
@@ -253,6 +435,7 @@ function parseImports(
   text: string,
   path: string,
   known: Set<string>,
+  aliases: AliasMap,
 ): WiringImport[] {
   const lines = text.split("\n");
   const out: WiringImport[] = [];
@@ -261,7 +444,7 @@ function parseImports(
     const line = lines[i];
     const side = line.match(/^\s*import\s+['"]([^'"]+)['"]/);
     if (side) {
-      out.push(importRow(path, side[1], ["*"], i + 1, known));
+      out.push(importRow(path, side[1], ["*"], i + 1, known, aliases));
       i += 1;
       continue;
     }
@@ -289,7 +472,7 @@ function parseImports(
         : from[4]
           ? [from[4]]
           : [from[2] || "*"];
-      out.push(importRow(path, from[5], names, startLine, known));
+      out.push(importRow(path, from[5], names, startLine, known, aliases));
     } else {
       const def = stmt.match(
         /^\s*import\s+(\w+)\s*,\s*\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/,
@@ -302,6 +485,7 @@ function parseImports(
             ["default", ...parseNamed(def[2])],
             startLine,
             known,
+            aliases,
           ),
         );
       }
@@ -313,7 +497,28 @@ function parseImports(
   for (let j = 0; j < lines.length; j += 1) {
     const req = lines[j].match(/require\s*\(\s*['"]([^'"]+)['"]\s*\)/);
     if (req) {
-      out.push(importRow(path, req[1], ["*"], j + 1, known));
+      out.push(importRow(path, req[1], ["*"], j + 1, known, aliases));
+    }
+  }
+  return out;
+}
+
+function parseReexports(
+  text: string,
+): { from: string; names: string[]; line: number }[] {
+  const out: { from: string; names: string[]; line: number }[] = [];
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i += 1) {
+    const star = lines[i].match(/^\s*export\s+\*\s+from\s+['"]([^'"]+)['"]/);
+    if (star) {
+      out.push({ from: star[1], names: ["*"], line: i + 1 });
+      continue;
+    }
+    const named = lines[i].match(
+      /^\s*export\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/,
+    );
+    if (named) {
+      out.push({ from: named[2], names: parseNamed(named[1]), line: i + 1 });
     }
   }
   return out;
@@ -325,9 +530,10 @@ function importRow(
   names: string[],
   line: number,
   known: Set<string>,
+  aliases: AliasMap,
 ): WiringImport {
-  const external = !spec.startsWith(".");
-  const resolvedPath = external ? undefined : resolveImport(path, spec, known);
+  const resolvedPath = resolveSpec(path, spec, known, aliases);
+  const external = !spec.startsWith(".") && !resolvedPath;
   return {
     names,
     from: spec,
@@ -335,6 +541,27 @@ function importRow(
     external,
     line,
   };
+}
+
+function resolveSpec(
+  fromPath: string,
+  spec: string,
+  known: Set<string>,
+  aliases: AliasMap,
+): string | undefined {
+  const candidates = spec.startsWith(".")
+    ? [join(dirname(fromPath), spec).replace(/\\/g, "/")]
+    : resolveAliasCandidates(fromPath, spec, aliases);
+  if (!candidates.length) return undefined;
+
+  for (const raw of candidates) {
+    for (const k of known) {
+      if (normalizeModulePath(k) === normalizeModulePath(raw)) return k;
+    }
+  }
+  // Outside the known walk set: still return a concrete path so callers can
+  // match against the changed module by normalized form.
+  return candidates[0];
 }
 
 function parseNamed(raw: string): string[] {
@@ -422,39 +649,9 @@ function symbolKind(
   return fallback;
 }
 
-function resolveImport(
-  fromPath: string,
-  spec: string,
-  known: Set<string>,
-): string | undefined {
-  const dir = dirname(fromPath);
-  const raw = join(dir, spec).replace(/\\/g, "/");
-  const candidates = [
-    raw,
-    `${raw}.ts`,
-    `${raw}.tsx`,
-    `${raw}.js`,
-    `${raw}.jsx`,
-    `${raw}/index.ts`,
-    `${raw}/index.tsx`,
-    `${raw}/index.js`,
-  ];
-  for (const c of candidates) {
-    if (known.has(c)) return c;
-  }
-  for (const k of known) {
-    if (stripExt(k) === stripExt(raw)) return k;
-  }
-  return undefined;
-}
-
 function pathsMatch(a: string, b: string): boolean {
   if (a === b) return true;
-  return stripExt(a) === stripExt(b);
-}
-
-function stripExt(path: string): string {
-  return path.replace(/(\/index)?\.(tsx?|jsx?|mjs|cjs)$/i, "");
+  return normalizeModulePath(a) === normalizeModulePath(b);
 }
 
 function formatNames(names: string[]): string {

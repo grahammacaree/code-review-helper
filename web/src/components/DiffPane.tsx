@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { isProsePath } from "../paths";
 import type { Annotation } from "../types";
 
 export function DiffPane({
@@ -33,7 +34,10 @@ export function DiffPane({
   }
 
   return (
-    <pre className="code diff" aria-label={`Diff ${path}`}>
+    <pre
+      className={isProsePath(path) ? "code diff wrap" : "code diff"}
+      aria-label={`Diff ${path}`}
+    >
       {lines.map((line, i) => (
         <div key={i}>
           <div className={diffClass(line)}>{line || " "}</div>

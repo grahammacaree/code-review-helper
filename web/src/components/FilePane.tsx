@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { dummyArgs, functionsIn } from "../functionAtLine";
+import { isProsePath } from "../paths";
 import { Prose } from "../prose";
 import type { Annotation, FnBlock, LineRange, LookCloser, UhOh } from "../types";
 import { ThreadBox, ThreadReply } from "./NoteThread";
@@ -155,7 +156,7 @@ export function FilePane({
     <div className="file-pane">
       <pre
         ref={pre}
-        className="code"
+        className={isProsePath(path) ? "code wrap" : "code"}
         aria-label={`Source ${path}`}
         onMouseUp={() => {
           const sel = window.getSelection();

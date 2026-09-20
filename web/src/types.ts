@@ -76,6 +76,9 @@ export interface FileCard {
 export interface ChaseCandidate {
   path: string;
   names: string[];
+  /** How the outside binding was found. */
+  via?: "resolved" | "bound" | "barrel";
+  from?: string;
 }
 
 export interface Wrapup {
@@ -259,6 +262,8 @@ export interface SessionSnapshot {
 
 export interface AuthStatus {
   hasKey: boolean;
+  /** Present when the server reports TypeSafe; optional for older fixtures. */
+  hasTypesafeKey?: boolean;
   configured: boolean;
   models?: string[];
   error?: string;

@@ -30,6 +30,8 @@ export async function walkQueue(opts: {
   repoPath: string;
   baseRef: string;
   signal?: AbortSignal;
+  prTitle?: string;
+  prBody?: string;
 }): Promise<{
   queue: string[];
   batched: string[];
@@ -43,7 +45,17 @@ export async function walkQueue(opts: {
   // Product first: a polish PR often touches many harness files that sort
   // early (test-utils matches "util") and would eat the whole spine. Tests
   // stay reachable via Walk all or Skip-remaining-tests, not as Core only.
-  const spine = coreSpine(ordered);
+  const product = ordered.filter((p) => !isTestPath(p));
+  const productPool = product.length ? product : ordered;
+  let spine = productPool.slice(0, CORE_LIMIT);
+  const { rankCoreSpine } = await import("./judgments/busywork.js");
+  const ranked = await rankCoreSpine({
+    orderedProduct: productPool,
+    prTitle: opts.prTitle,
+    prBody: opts.prBody,
+    limit: CORE_LIMIT,
+  });
+  if (ranked?.length) spine = ranked;
   const hits = await scoreChangedFiles({
     repoPath: opts.repoPath,
     baseRef: opts.baseRef,
