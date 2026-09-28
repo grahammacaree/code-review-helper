@@ -1,6 +1,7 @@
 import { Agent, Cursor, CursorAgentError } from "@cursor/sdk";
 import { cursorApiKey, cursorModel } from "./env.js";
 import { fileDiff, githubDiffUrl, parseFocusFromDiff, readWorktreeFile } from "./git.js";
+import { budgetDiffForAgent } from "./diffFold.js";
 import { excerptAround, type Excerpt } from "./excerpt.js";
 import { fileLinks, isTestPath } from "./scaffold.js";
 import type { ConceptDepth, ConceptForCard } from "./conceptMemory.js";
@@ -148,7 +149,7 @@ export async function generateOverview(opts: {
 }): Promise<Overview> {
   const holder: { prose?: Pick<
     Overview,
-    "whatsHappening" | "why" | "dependencies" | "howItConnects"
+    "whatsHappening" | "why" | "design" | "examples" | "dependencies" | "howItConnects"
   > } = {};
   // An AI-sized PR can change hundreds of files. The queue is what gets walked,
   // so the rest is context for the map and a long tail of it earns nothing.
@@ -161,19 +162,27 @@ export async function generateOverview(opts: {
       ? `${rows.slice(0, AGENT_PATH_ROWS).join("\n")}\n…and ${rows.length - AGENT_PATH_ROWS} more changed paths`
       : rows.join("\n");
   const body = (opts.prBody || "").trim().slice(0, AGENT_BODY_CHARS);
+  const { extractAuthorIntents } = await import("./intentAnchors.js");
+  const authorIntents = extractAuthorIntents(opts.prBody);
 
   const run = await opts.agent.send(
     [
       "Fill the overview card. Call publish_overview once. Chat text is ignored.",
+      "Shape (Whiteboard-style architect brief): whatsHappening → why → design → examples → howItConnects → dependencies.",
       "whatsHappening: concrete behavior after merge.",
       "why: the problem or request this PR exists for.",
+      "design: how the solution works at components / data / control flow — not function-by-function. Omit when the change is self-evident.",
+      "examples: 1–3 concrete call/API/usage examples a teammate can hold onto (or empty string if none).",
       "dependencies: upstream systems, packages, config, endpoints.",
-      "howItConnects: call chain / data flow across the queued files. Do not repeat the repo watch list.",
+      "howItConnects: call chain / data flow across the queued files (implementation walk order). Do not repeat the repo watch list.",
       commentaryPromptBlock(opts.commentary),
       `Branch: ${opts.branch}`,
       opts.prUrl ? `PR URL: ${opts.prUrl}` : "No PR URL.",
       opts.prTitle ? `PR title: ${opts.prTitle}` : "",
       body ? `PR body:\n${body}` : "",
+      authorIntents.length
+        ? `Author intents already extracted from the PR body (do not invent more):\n${authorIntents.map((q) => `- ${q}`).join("\n")}`
+        : "",
       `Queue (already chosen, do not reorder):\n${opts.queue.join("\n") || "(empty)"}`,
       `Changed paths:\n${listed}`,
     ]
@@ -189,6 +198,8 @@ export async function generateOverview(opts: {
               properties: {
                 whatsHappening: { type: "string" },
                 why: { type: "string" },
+                design: { type: "string" },
+                examples: { type: "string" },
                 dependencies: { type: "string" },
                 howItConnects: { type: "string" },
               },
@@ -203,6 +214,8 @@ export async function generateOverview(opts: {
               holder.prose = {
                 whatsHappening: String(args.whatsHappening),
                 why: String(args.why),
+                design: args.design ? String(args.design) : undefined,
+                examples: args.examples ? String(args.examples) : undefined,
                 dependencies: String(args.dependencies),
                 howItConnects: String(args.howItConnects),
               };
@@ -226,6 +239,7 @@ export async function generateOverview(opts: {
     assetsNote: opts.assetsNote,
     noiseNote: opts.noiseNote,
     repoNote: opts.repoNote,
+    authorIntents: authorIntents.length ? authorIntents : undefined,
   };
 }
 
@@ -299,10 +313,7 @@ export async function generateFileCard(opts: {
     context: 0,
   });
   const focus = opts.entry.kind === "new" ? [] : parseFocusFromDiff(hunks);
-  const diff =
-    hunks.length > AGENT_DIFF_CHARS
-      ? `${hunks.slice(0, AGENT_DIFF_CHARS)}\n…[truncated ${hunks.length - AGENT_DIFF_CHARS} chars]`
-      : hunks;
+  const diff = budgetDiffForAgent(hunks, AGENT_DIFF_CHARS).text;
   const links = fileLinks(
     opts.covered,
     opts.queue.slice(opts.index),
@@ -319,6 +330,7 @@ export async function generateFileCard(opts: {
       | "map"
       | "couldHave"
       | "uhOh"
+      | "intentAnchors"
     >;
   } = {};
 
@@ -330,6 +342,9 @@ export async function generateFileCard(opts: {
         opts.overview
           ? [
               `PR why: ${opts.overview.why}`,
+              opts.overview.design
+                ? `PR design: ${opts.overview.design}`
+                : "",
               `How the queued files connect: ${opts.overview.howItConnects}`,
               opts.overview.repoNote
                 ? `Repo bias (tilt be careful notes when this file hits the seam; do not invent rules; do not add sections):\n${opts.overview.repoNote}`
@@ -343,6 +358,8 @@ export async function generateFileCard(opts: {
         .filter(Boolean)
         .join("\n\n");
 
+  const intents = opts.overview?.authorIntents ?? [];
+
   const run = await opts.agent.send(
     [
       `File ${opts.index}/${opts.total}: ${opts.entry.path} (${opts.entry.kind}${opts.entry.oldPath ? ` from ${opts.entry.oldPath}` : ""}).`,
@@ -354,6 +371,9 @@ export async function generateFileCard(opts: {
       "map: optional. In-file: how lookCloser pieces connect when interlocking. Sibling: when this file and another queued/covered path solve the same UX differently, 2–4 lines naming the sibling and the divergence. Omit when not useful. Styles/barrels: prefer roleInPr over inventing a layout map.",
       "couldHave: 0–2 evidenced design forks, or empty.",
       "uhOh: 0–3 evidence-backed watch-outs with line ranges, or empty. Do not invent. If a repo watch list was given, use it only when this hunk actually hits that seam.",
+      intents.length
+        ? `intentAnchors: 0–2 when THIS file clearly implements an author intent below. quote must be copied verbatim from the list; note = one sentence on how this hunk delivers it. Empty array if none fit.\nIntents:\n${intents.map((q) => `- ${q}`).join("\n")}`
+        : "intentAnchors: omit or empty — no author intents on the overview.",
       opts.entry.kind === "deleted"
         ? "File was deleted; do not invent current contents."
         : "",
@@ -407,6 +427,17 @@ export async function generateFileCard(opts: {
                     required: ["text", "startLine", "endLine"],
                   },
                 },
+                intentAnchors: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      quote: { type: "string" },
+                      note: { type: "string" },
+                    },
+                    required: ["quote", "note"],
+                  },
+                },
               },
               required: ["what", "why"],
             },
@@ -418,6 +449,19 @@ export async function generateFileCard(opts: {
                     endLine: number;
                     why: string;
                   }[])
+                : [];
+              const intentAnchors = Array.isArray(args.intentAnchors)
+                ? (args.intentAnchors as { quote: string; note: string }[])
+                    .filter(
+                      (a) =>
+                        a.quote &&
+                        (!intents.length || intents.includes(String(a.quote))),
+                    )
+                    .slice(0, 2)
+                    .map((a) => ({
+                      quote: String(a.quote),
+                      note: String(a.note),
+                    }))
                 : [];
               holder.prose = {
                 what: String(args.what),
@@ -436,6 +480,9 @@ export async function generateFileCard(opts: {
                       endLine: number;
                     }[])
                   : [],
+                intentAnchors: intentAnchors.length
+                  ? intentAnchors
+                  : undefined,
               };
               return "File card recorded. Stop.";
             },

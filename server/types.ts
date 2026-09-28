@@ -43,17 +43,29 @@ export interface UhOh {
   endLine: number;
 }
 
+/** Author asked for X — this file is where X landed (Whiteboard TraceQuote idea). */
+export interface IntentAnchor {
+  quote: string;
+  note: string;
+}
+
 export interface Overview {
   branch: string;
   prUrl?: string;
   whatsHappening: string;
   why: string;
+  /** Architecture / control-flow shape of the change (Whiteboard “design”). */
+  design?: string;
+  /** Concrete call/API examples a teammate can hold onto. */
+  examples?: string;
   dependencies: string;
   howItConnects: string;
   queue: string[];
   assetsNote?: string;
   noiseNote?: string;
   repoNote?: string;
+  /** Intents extracted from the PR body for file-card anchoring. */
+  authorIntents?: string[];
 }
 
 import type {
@@ -87,6 +99,8 @@ export interface FileCard {
   map?: string;
   couldHave: string[];
   uhOh: UhOh[];
+  /** PR-body intents this file implements, when evidence exists. */
+  intentAnchors?: IntentAnchor[];
   index: number;
   total: number;
   chase?: boolean;

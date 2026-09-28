@@ -12,7 +12,9 @@
     "check:parse": "tsx checks/parse.ts",
     "check:queue": "tsx checks/queue.ts",
     "check:wiring": "tsx checks/wiring.ts",
+    "check:folds": "tsx checks/folds.ts",
     "check:typesafe": "tsx checks/typesafe-smoke.ts",
+    "check:jev-efficiency": "tsx checks/jev-efficiency.ts",
     "build": "tsc -p tsconfig.server.json && vite build",
     "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.web.json --noEmit"
   },

@@ -150,6 +150,9 @@ interface Session {
 const sessions = new Map<string, Session>();
 
 function persist(s: Session): void {
+  // Pin pattern (Whiteboard-inspired): persist path/oids + card metadata only.
+  // fileText / diffText / wiring are rehydrated from the checkout on restore
+  // (see restoreSessions). Never write blobs into data/sessions/.
   const {
     agent,
     primed,
@@ -834,6 +837,31 @@ async function advanceToFile(s: Session, index: number): Promise<void> {
       s.fileText = await readWorktreeFile(s.repoPath, path);
     } catch {
       s.fileText = "// Could not read this path from HEAD.";
+    }
+    if (s.fileText && !s.fileText.startsWith("// Could not")) {
+      const { snapLookCloser, snapUhOh } = await import("./structure.js");
+      card = {
+        ...card,
+        lookCloser: snapLookCloser(card.lookCloser, s.fileText, path),
+        uhOh: snapUhOh(card.uhOh, s.fileText, path),
+      };
+      s.card = card;
+    }
+    if (
+      !entry.chase &&
+      !card.intentAnchors?.length &&
+      s.overview?.authorIntents?.length
+    ) {
+      const { matchIntentsToPath } = await import("./intentAnchors.js");
+      const matched = matchIntentsToPath(
+        s.overview.authorIntents,
+        path,
+        `${card.what}\n${card.why}\n${card.roleInPr ?? ""}`,
+      );
+      if (matched.length) {
+        card = { ...card, intentAnchors: matched };
+        s.card = card;
+      }
     }
     if (!entry.chase && (card.lookCloser.length || card.uhOh.length)) {
       const { verifyCardClaims } = await import("./judgments/verify.js");

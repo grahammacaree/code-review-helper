@@ -35,6 +35,19 @@ export function RolePane({
           <Prose text={card.concept} />
         </>
       )}
+      {card.intentAnchors && card.intentAnchors.length > 0 && (
+        <>
+          <h3>Author asked for</h3>
+          <ul className="intent-anchors">
+            {card.intentAnchors.map((a) => (
+              <li key={a.quote}>
+                <blockquote className="intent-quote">{a.quote}</blockquote>
+                <Prose text={a.note} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {card.map && (
         <>
           <h3>How it connects</h3>

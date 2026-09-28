@@ -85,10 +85,22 @@ function OverviewBody({ overview }: { overview: Overview }) {
       <Prose text={overview.whatsHappening} />
       <h2>Why</h2>
       <Prose text={overview.why} />
-      <h2>Dependencies</h2>
-      <Prose text={overview.dependencies} />
+      {overview.design && (
+        <>
+          <h2>Design</h2>
+          <Prose text={overview.design} />
+        </>
+      )}
+      {overview.examples && (
+        <>
+          <h2>Examples</h2>
+          <Prose text={overview.examples} />
+        </>
+      )}
       <h2>How it connects</h2>
       <Prose text={overview.howItConnects} />
+      <h2>Dependencies</h2>
+      <Prose text={overview.dependencies} />
       {overview.repoNote && (
         <>
           <h2>Repo</h2>

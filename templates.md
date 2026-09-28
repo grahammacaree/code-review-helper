@@ -11,9 +11,13 @@ Use these shapes verbatim. Fill the brackets; do not add extra sections.
 
 **Why:** [the problem or request this PR exists for]
 
-**Dependencies:** [upstream systems, packages, config, endpoints this relies on; what has to exist first]
+**Design:** [optional — how the solution works at components / data / control flow, not function-by-function]
 
-**How it connects:** [call chain / data flow across the queued files]
+**Examples:** [optional — 1–3 concrete call/API/usage examples a teammate can hold onto]
+
+**How it connects:** [call chain / data flow across the queued files — implementation walk order]
+
+**Dependencies:** [upstream systems, packages, config, endpoints this relies on; what has to exist first]
 
 **Repo:** [mobile app / website front-end / backend / mixed / unclear] — [evidence from package.json, native dirs, or docs]
 

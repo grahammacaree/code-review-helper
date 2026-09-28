@@ -32,6 +32,11 @@ export interface UhOh {
   endLine: number;
 }
 
+export interface IntentAnchor {
+  quote: string;
+  note: string;
+}
+
 export interface LineRange {
   start: number;
   end: number;
@@ -42,12 +47,15 @@ export interface Overview {
   prUrl?: string;
   whatsHappening: string;
   why: string;
+  design?: string;
+  examples?: string;
   dependencies: string;
   howItConnects: string;
   queue: string[];
   assetsNote?: string;
   noiseNote?: string;
   repoNote?: string;
+  authorIntents?: string[];
 }
 
 export interface FileCard {
@@ -66,6 +74,7 @@ export interface FileCard {
   map?: string;
   couldHave: string[];
   uhOh: UhOh[];
+  intentAnchors?: IntentAnchor[];
   index: number;
   total: number;
   chase?: boolean;

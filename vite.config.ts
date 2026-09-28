@@ -7,6 +7,10 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5173,
+    fs: {
+      // web/src/diffFold.ts re-exports server/diffFold.ts (single fold source).
+      allow: [".."],
+    },
     proxy: {
       "/api": "http://127.0.0.1:8787",
     },

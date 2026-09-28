@@ -33,7 +33,17 @@ Three properties worth keeping:
 - The excerpt says what it is (`the call site with the surrounding function`, `2 call sites of 5 mentions…`), so the model knows it is reading a selection rather than a whole file.
 - Imports are skipped, including names sitting on their own line inside a braced import list. An import proves nothing about use.
 
-A prefix cut is right where the head genuinely is the useful part: `AGENT_DIFF_CHARS` (8,000) on a diff, `AGENT_BODY_CHARS` (4,000) on a PR body, `AGENT_PATH_ROWS` (120) on the changed-path listing — enough of a large PR to see its shape without paying for every path.
+A prefix cut is right where the head genuinely is the useful part: `AGENT_BODY_CHARS` (4,000) on a PR body, `AGENT_PATH_ROWS` (120) on the changed-path listing — enough of a large PR to see its shape without paying for every path.
+
+### Fold-aware diffs (shipped)
+
+When a file hunk exceeds `AGENT_DIFF_CHARS` (8,000), `budgetDiffForAgent` in `server/diffFold.ts` collapses import runs and summarizes large added function bodies as pseudocode before any head truncate — so the budget keeps the mechanism, not only the top of the file. The Diff pane uses the same fold finder for the reviewer. Adapted from [/dev/fast Whiteboard](https://dev.fast/); see [whiteboard-credit.md](./whiteboard-credit.md).
+
+**Measure:** `npm run check:folds` asserts a padded hunk prefers `folded` / `folded_truncated` over a blind head cut and still mentions the summarized function.
+
+### Session pins (shipped)
+
+`persist` writes path / `headOid` / `baseRef` / card metadata only — never `fileText` or `diffText`. `restoreSessions` rehydrates those blobs from the checkout (and refuses if HEAD no longer matches `headOid`). Same idea as Whiteboard’s pin-then-hydrate; we already had the strip+reload, now called out as intentional.
 
 ## Send recent history, clipped
 
@@ -68,4 +78,6 @@ Fewer tokens usually means a faster card, but two of these are purely about wait
 
 Some walk gates need a decision, not prose: teach-back kind, skip intent, which files are core, which pending tests are busywork, which outside callers are worth chasing, whether an ambiguous import binds to the changed module, whether a Look closer / Be careful claim is supported by the hunk, and which concept to teach when several seams match. Those run on Jev when `TYPESAFE_API_KEY` is set, with confidence floors. Uncertain or missing-key answers fall back to the Cursor agent (or the previous heuristic). File cards, Q&A, and commentary stay on Cursor.
 
-Outside-caller discovery itself is code-first (`findOutsideImporters`: tsconfig aliases, symbol+stem grep, one barrel hop); TypeSafe only ranks/binds after candidates exist. See `server/judgments/`, `npm run check:wiring`, and `npm run check:typesafe`.
+Outside-caller discovery itself is code-first (`findOutsideImporters`: tsconfig aliases, symbol+stem grep, one barrel hop, `git cat-file --batch` hydrate); TypeSafe only ranks/binds after candidates exist. See `server/judgments/`, `npm run check:wiring`, `npm run check:folds`, and `npm run check:typesafe`.
+
+Diff presentation and a few efficiency tricks borrow from [/dev/fast Whiteboard](https://dev.fast/) (MIT) without the canvas: import folds + pseudocode for large adds (`web/src/diffFold.ts`), overview **Design** / **Examples**, author-intent anchors, and `git cat-file --batch` hydrate. Full credit and “what we did not take”: [whiteboard-credit.md](./whiteboard-credit.md).

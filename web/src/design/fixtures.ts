@@ -91,10 +91,18 @@ const OVERVIEW: Overview = {
   whatsHappening:
     "A new user with no follows made Starling answer with a `StarlingNotFoundError`, and `getFollows` treated that as an upstream failure — so the whole follows surface 502'd instead of rendering an empty state. This PR treats not-found as an empty list, and separately relaxes the override-URL guard so the same code path can be exercised against a local Starling.",
   why: "Nobody who had never followed anything could follow anything: the read that powers the follow button failed before the write was ever offered. It shipped as a 502, so it read as an outage rather than a missing-record case.",
+  design:
+    "Widen the settled-promise helper's tolerate set at the network edge; keep framework error typing as the predicate. Local Starling overrides are a separate allowlist change so the empty-state path is reproducible without touching prod URLs.",
+  examples:
+    "`valueFromSettledPromise(rejected StarlingNotFoundError)` → `[]`. Loopback `http://127.0.0.1:…` override parses where it previously threw.",
   dependencies:
     "`@northwind/atlas-framework` supplies the Starling client and the error classes. No new packages; the framework change is additive (a widened allowlist), so existing callers keep their behavior.",
   howItConnects:
     "`follow-server.utils.ts` is the fix. `api-url-override.ts` is what made the fix reproducible locally. The two test files lock each half: one proves not-found becomes `[]`, the other proves loopback overrides parse.",
+  authorIntents: [
+    "treat Starling not-found as an empty follows list, not a 502",
+    "allow loopback overrides so we can reproduce locally",
+  ],
   queue: QUEUE,
   repoNote:
     "Atlas is a multi-network monorepo: `packages/` is shared by every network, `apps/atlas-network-*` is one network. A change under `packages/` has blast radius past this PR's queue.",
@@ -131,6 +139,12 @@ const FIX_CARD: FileCard = {
       startLine: 62,
       endLine: 79,
       why: "Calls the helper twice (follows and blocked) via `allSettled`; worth checking both call sites get the same treatment.",
+    },
+  ],
+  intentAnchors: [
+    {
+      quote: "treat Starling not-found as an empty follows list, not a 502",
+      note: "This helper is where not-found becomes `[]` instead of propagating.",
     },
   ],
   map: "Request comes in → `getFollows` fires both Starling reads through `Promise.allSettled` → each result goes through `valueFromSettledPromise`, which is the only place a rejection is classified → callers get arrays and never see the error class.",

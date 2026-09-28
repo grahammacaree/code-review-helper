@@ -5,6 +5,7 @@ import {
   resolveAliasCandidates,
   type AliasMap,
 } from "./aliases.js";
+import { blobContainsHit, blobReaderFor } from "./blobBatch.js";
 import { gitGrepFiles, readWorktreeFile } from "./git.js";
 import { escapeRe } from "./strings.js";
 
@@ -221,10 +222,16 @@ export async function findOutsideImporters(opts: {
     if (!isWiringCodePath(path)) continue;
     let text: string;
     try {
-      text = await readWorktreeFile(opts.repoPath, path);
+      const blob = await blobReaderFor(opts.repoPath).read(path);
+      if (blob == null) continue;
+      text = blob;
     } catch {
       continue;
     }
+    // Hydrate check: at least one export name (or module stem) still in blob.
+    const stem = opts.targetPath.split("/").pop()?.replace(/\.\w+$/, "") ?? "";
+    const needles = [...opts.exportNames, stem].filter(Boolean);
+    if (!needles.some((n) => blobContainsHit(text, n))) continue;
     const imports = parseImports(text, path, known, aliases);
     const names = new Set<string>();
     let via: OutsideImporter["via"] = "resolved";
@@ -309,7 +316,9 @@ export async function findOutsideImporters(opts: {
       if (!isWiringCodePath(path)) continue;
       let text: string;
       try {
-        text = await readWorktreeFile(opts.repoPath, path);
+        const blob = await blobReaderFor(opts.repoPath).read(path);
+        if (blob == null) continue;
+        text = blob;
       } catch {
         continue;
       }

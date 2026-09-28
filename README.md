@@ -29,7 +29,7 @@ It has not escaped my notice that this tooling can also be used to interrogate m
 
 **Code is connected.** A diff line in isolation rarely tells the story. Changes propagate through call chains, imports and exports, shared types, config, and the PR’s stated goal. Good review is systems thinking: how this file serves the whole change, who calls what, what broke if this assumption is wrong. Tools should foreground that connectivity — map before file-by-file, role in the PR, wiring between paths — not encourage file-at-a-time amnesia.
 
-**Amplify, don't replace.** AI tooling is good at shortcuts: summarize diffs, flag patterns, skip to “looks fine.” Shortcuts save time, but they can also train you out of the work that reviews are for. Useful assistants **prepare** (map the change set, order files by dependency, surface how pieces connect, flag evidence-backed risks), **structure** (one file at a time with links back to the queue and the overview), and **support** (answer questions, export notes for the real GitHub review). They should not **substitute** for understanding or for the act of approving. Where the host needs a *decision* rather than prose — teach-back grade, core spine, chase rank, import bind — it asks [TypeSafe](https://typesafe.ai)’s System One model **Jev** instead of another long agent turn; see [Typed judgments with TypeSafe (Jev)](docs/typesafe-judgments.md).
+**Amplify, don't replace.** AI tooling is good at shortcuts: summarize diffs, flag patterns, skip to “looks fine.” Shortcuts save time, but they can also train you out of the work that reviews are for. Useful assistants **prepare** (map the change set, order files by dependency, surface how pieces connect, flag evidence-backed risks), **structure** (one file at a time with links back to the queue and the overview), and **support** (answer questions, export notes for the real GitHub review). They should not **substitute** for understanding or for the act of approving. Where the host needs a *decision* rather than prose — teach-back grade, core spine, chase rank, import bind — it asks [TypeSafe](https://typesafe.ai)’s System One model **Jev** instead of another long agent turn; see [Typed judgments with TypeSafe (Jev)](docs/typesafe-judgments.md). Diff folding, overview Design/Examples, and author-intent pins borrow presentation ideas from [/dev/fast Whiteboard](https://dev.fast/) (MIT) without adopting their canvas — see [Ideas from Whiteboard](docs/whiteboard-credit.md).
 
 **Keep the human on the hook.** The model can propose; the reviewer still paraphrases, prioritizes, and signs off. Gates that block “lgtm” without explanation, separation of defect-hunting from the walk, and notes that feed into an official review — all of that keeps AI in a collaborator role rather than an autopilot.
 
@@ -200,6 +200,10 @@ Delete `data/` and `.env` if you want a clean slate. `New walkthrough` starts a 
 | `server/judgments/`                 | Teach-back, intent, core rank, busywork, chase rank, bind, claim verify, concept pick — Cursor stays for prose         |
 | `server/aliases.ts`                 | tsconfig/jsconfig `paths` + `baseUrl` so outside-caller search resolves `@/`-style imports                             |
 | `server/excerpt.ts`                 | Cuts a file down to the call sites or definition of a name, for chase prompts                                         |
+| `server/diffFold.ts`                | Diff folds + `budgetDiffForAgent` for file-card prompts; web re-exports for Diff pane                               |
+| `server/blobBatch.ts`               | Persistent `git cat-file --batch` reader ([Whiteboard](docs/whiteboard-credit.md) efficiency pattern) for chase hydrate |
+| `server/structure.ts`               | Snap Look closer / Be careful onto enclosing functions                                                             |
+| `server/intentAnchors.ts`           | Extract PR-body author intents; match to file cards                                                                |
 | `server/wiring.ts`                  | Walk-scope import/export graph; `findOutsideImporters` (alias + symbol grep + one barrel hop + TypeSafe bind)          |
 | `server/repoLens.ts`                | Checkout kind + doc/stack Watch for (overview + be-careful bias)                                                          |
 | `server/concepts.ts`                | Which architectural systems this checkout runs on + the staff-level framing taught when a hunk hits that seam         |
@@ -216,9 +220,12 @@ Delete `data/` and `.env` if you want a clean slate. `New walkthrough` starts a 
 | `checks/parse.ts`                   | `npm run check:parse` — the function-finding and excerpting passes, on inline fixtures                                 |
 | `checks/queue.ts`                   | `npm run check:queue` — core-only spine prefers product over test harness                                              |
 | `checks/wiring.ts`                  | `npm run check:wiring` — alias resolve + outside importers (no live API)                                               |
+| `checks/folds.ts`                   | `npm run check:folds` — diff folds, intent extract, Look closer snap                                                   |
 | `checks/typesafe-smoke.ts`          | `npm run check:typesafe` — live Choice/Noul/Score smoke (needs `TYPESAFE_API_KEY`)                                     |
+| `checks/jev-efficiency.ts`          | `npm run check:jev-efficiency` — live Jev latency/payload measure (needs `TYPESAFE_API_KEY`)                           |
 | `docs/token-efficiency.md`          | What each prompt sends and why, with measurements — read before adding a prompt                                        |
 | `docs/typesafe-judgments.md`        | TypeSafe / **Jev** shoutout + every judgment door (teach-back, chase, bind, …)                                         |
+| `docs/whiteboard-credit.md`         | Credit to [/dev/fast Whiteboard](https://dev.fast/) for folds, Design/Examples, intent anchors, blob batch               |
 
 
 In Cursor the skill id is `pr-file-walkthrough` so existing triggers keep working. This repo is named `code-review-helper`.
@@ -226,5 +233,7 @@ In Cursor the skill id is `pr-file-walkthrough` so existing triggers keep workin
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+Diff-fold / overview / intent-anchor / blob-batch patterns were adapted from ideas in [Whiteboard](https://github.com/devdotfast/whiteboard) by [/dev/fast](https://dev.fast/) (MIT); we reimplemented them in TypeScript rather than vendoring their app or [diffr](https://github.com/devdotfast/diffr). Details: [docs/whiteboard-credit.md](docs/whiteboard-credit.md).
 
 The tab bar icons are [Octicons](https://github.com/primer/octicons) (© GitHub, MIT), inlined as path data in `web/src/components/Octicon.tsx`.
