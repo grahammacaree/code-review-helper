@@ -53,6 +53,10 @@ When a file hunk exceeds `AGENT_DIFF_CHARS` (8,000), `budgetDiffForAgent` in `se
 
 `checkoutMapBlock` in `server/commentary.ts` extracts just the repo map, because the function brief needs the map and not the craft notes or the hand-written best-practice commentary. A prompt takes the section it uses.
 
+Checkout **group practices** are the same idea on the other side of the fence: `loadRepoLens` reads only the agent/contributing/rules/named-practice files that could apply, and `extractPracticeItems` keeps heading-scoped bullets rather than sending the whole `AGENTS.md`. Caps: 24 files, 32k characters each, 6 practices in the overview note. Manifest and doc `stat`/`read` run in parallel; overview waits on `throwIfAborted` after the lens so a quit mid-scan cannot stamp practices onto a dead walk.
+
+**Measure:** `npm run check:repo-lens` asserts a cache heading’s “site id in the key” bullet survives without repeating the word cache, that an API-only change still raises a miss watch, that `userSettings` / `alternative` paths do not false-positive as hooks or native bridge, and that the formatted lens stays under 4k characters.
+
 ## Ask once and keep the answer
 
 The function brief behind the sandbox's About tab costs a round trip, so nothing is fetched until the tab is opened and the result is cached per function (keyed `path:startLine`). **Ask again** is the only thing that bypasses the cache — an explicit request, so a stale answer cannot be served to someone who asked for a fresh one.
@@ -78,6 +82,6 @@ Fewer tokens usually means a faster card, but two of these are purely about wait
 
 Some walk gates need a decision, not prose: teach-back kind, skip intent, which files are core, which pending tests are busywork, which outside callers are worth chasing, whether an ambiguous import binds to the changed module, whether a Look closer / Be careful claim is supported by the hunk, and which concept to teach when several seams match. Those run on Jev when `TYPESAFE_API_KEY` is set, with confidence floors. Uncertain or missing-key answers fall back to the Cursor agent (or the previous heuristic). File cards, Q&A, and commentary stay on Cursor.
 
-Outside-caller discovery itself is code-first (`findOutsideImporters`: tsconfig aliases, symbol+stem grep, one barrel hop, `git cat-file --batch` hydrate); TypeSafe only ranks/binds after candidates exist. See `server/judgments/`, `npm run check:wiring`, `npm run check:folds`, and `npm run check:typesafe`.
+Outside-caller discovery itself is code-first (`findOutsideImporters`: tsconfig aliases, symbol+stem grep, one barrel hop, `git cat-file --batch` hydrate); TypeSafe only ranks/binds after candidates exist. See `server/judgments/`, `npm run check:wiring`, `npm run check:folds`, `npm run check:repo-lens`, and `npm run check:typesafe`.
 
 Diff presentation and a few efficiency tricks borrow from [/dev/fast Whiteboard](https://dev.fast/) (MIT) without the canvas: import folds + pseudocode for large adds (`web/src/diffFold.ts`), overview **Design** / **Examples**, author-intent anchors, and `git cat-file --batch` hydrate. Full credit and “what we did not take”: [whiteboard-credit.md](./whiteboard-credit.md).

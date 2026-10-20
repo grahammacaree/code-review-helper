@@ -649,12 +649,19 @@ async function runOverview(s: Session, mode: "all" | "core"): Promise<void> {
   s.workingOn = "Mapping the PR…";
   const branch = await currentBranch(s.repoPath);
   const paths = s.files.map((f) => f.path);
-  const lens = await loadRepoLens(s.repoPath, paths);
-  s.concepts = await loadRepoConcepts(s.repoPath, paths);
+  // Lens/concepts are pure FS reads — still check cancel before applying
+  // results so a quit mid-scan cannot stamp an overview onto a dead walk.
+  const [lens, concepts] = await Promise.all([
+    loadRepoLens(s.repoPath, paths),
+    loadRepoConcepts(s.repoPath, paths),
+  ]);
+  throwIfAborted(s);
+  s.concepts = concepts;
   const repoNote = [formatRepoLens(lens), conceptsNote(s.concepts)]
     .filter(Boolean)
     .join("\n\n") || undefined;
   const commentary = await ensureCommentary(s);
+  throwIfAborted(s);
   s.overview = await withAgent(s, (agent) =>
     generateOverview({
       agent,

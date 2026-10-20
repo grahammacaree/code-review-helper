@@ -337,7 +337,7 @@ export async function generateFileCard(opts: {
   // The map and the private notes were sent to this same agent earlier, so a
   // primed agent gets a pointer instead of the text again.
   const carried = opts.primed?.walkContext
-    ? "The PR map, the repo bias list, and the private notes are earlier in this conversation. Keep applying them; tilt be careful notes only where this hunk actually hits a listed seam."
+    ? "The PR map, the repo bias list, group practices, and the private notes are earlier in this conversation. Keep applying them; tilt be careful notes where this hunk hits a listed seam or skips a documented practice it ought to follow."
     : [
         opts.overview
           ? [
@@ -347,7 +347,7 @@ export async function generateFileCard(opts: {
                 : "",
               `How the queued files connect: ${opts.overview.howItConnects}`,
               opts.overview.repoNote
-                ? `Repo bias (tilt be careful notes when this file hits the seam; do not invent rules; do not add sections):\n${opts.overview.repoNote}`
+                ? `Repo bias (tilt be careful notes when this file hits the seam or skips a listed group practice; do not invent rules; do not add sections):\n${opts.overview.repoNote}`
                 : "",
             ]
               .filter(Boolean)
@@ -370,7 +370,7 @@ export async function generateFileCard(opts: {
       "lookCloser: 0–3 named hotspots (complex/novel/central) with line ranges. Behavior pivots: if the hunk is tiny but the point is a semantic choice (wrong flag/signal would regress UX), put that symbol in lookCloser and phrase why with the wrong alternative (e.g. 'vs isFetching — pagination would flash RefreshControl') — do not leave lookCloser empty on those files.",
       "map: optional. In-file: how lookCloser pieces connect when interlocking. Sibling: when this file and another queued/covered path solve the same UX differently, 2–4 lines naming the sibling and the divergence. Omit when not useful. Styles/barrels: prefer roleInPr over inventing a layout map.",
       "couldHave: 0–2 evidenced design forks, or empty.",
-      "uhOh: 0–3 evidence-backed watch-outs with line ranges, or empty. Do not invent. If a repo watch list was given, use it only when this hunk actually hits that seam.",
+      "uhOh: 0–3 evidence-backed watch-outs with line ranges, or empty. Do not invent. If group practices or a Watch for list were given, use them when this hunk hits that seam, and when this file is a write/read that ought to follow them and does not (missing invalidate, key, TTL, isolation). Cite the practice; do not quiz teach-back on it.",
       intents.length
         ? `intentAnchors: 0–2 when THIS file clearly implements an author intent below. quote must be copied verbatim from the list; note = one sentence on how this hunk delivers it. Empty array if none fit.\nIntents:\n${intents.map((q) => `- ${q}`).join("\n")}`
         : "intentAnchors: omit or empty — no author intents on the overview.",

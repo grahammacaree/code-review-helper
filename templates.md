@@ -21,8 +21,12 @@ Use these shapes verbatim. Fill the brackets; do not add extra sections.
 
 **Repo:** [mobile app / website front-end / backend / mixed / unclear] — [evidence from package.json, native dirs, or docs]
 
-**Watch for** (bias be careful notes when the hunk hits the seam; not a quiz):
-- [doc bullet or kind-level question]
+**Watch for** (bias be careful notes when the hunk hits the seam or skips a documented practice; not a quiz):
+- [kind-level question, or a miss: this PR looks like it skipped a documented seam]
+- …
+
+**Group practices** (from checkout docs — Be careful if this PR fights or skips them):
+- [heading-scoped or keyword bullet] (`AGENTS.md`)
 - …
 
 **Queue** (dependency order):

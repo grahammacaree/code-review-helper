@@ -20,7 +20,9 @@ toward the questions they are expected to catch (isolation, cache, the
 seams that matter *here*). On a repo they are catching up on, spend that
 same attention on the teachable big picture — what kind of app this is,
 how data and failures move — not only local trivia. Derive that bias
-from the checkout (docs, stack). Do not invent house law.
+from the checkout (docs, stack). Do not invent house law. When those docs
+state a group practice (cache keys, invalidation, isolation), Be careful
+should fire if this PR fights it or skips it.
 
 Wiring among changed files is the default graph so the walk stays
 teachable. Unchanged callers of a changed contract are still in play:
@@ -170,11 +172,15 @@ shape in [templates.md](templates.md):
   files (e.g. route → handler → client → registry → tests → docs).
 - **Repo** — what this checkout is (mobile app, website front-end,
   backend, mixed), from manifests and docs — not a guess. Then **Watch
-  for**: 0–5 seams from `AGENTS.md` / `CONTRIBUTING` / Cursor rules, or
-  from that kind (isolation, cache, client vs server, offline, authz).
-  Bias later be careful notes when the hunk hits the seam. Not a new teach-back
-  gate. Do not invent house rules that are not in the docs or implied
-  by the stack.
+  for**: kind-level questions (isolation, cache, client vs server, offline,
+  authz) plus a **miss** when the change set looks like it skipped a
+  documented seam (e.g. a write/fetch PR on a cached site with no
+  invalidation files). Then **Group practices**: short rules harvested
+  from `AGENTS.md` / `CONTRIBUTING` / Cursor rules / nested package
+  `AGENTS.md` / named docs (`docs/*cache*`, etc.) that this PR hits or
+  *ought* to follow. Bias later be careful notes when the hunk fights or
+  skips those practices. Not a teach-back gate. Do not invent house rules
+  that are not in the docs or implied by the stack.
 - **Queue** — dependency / call-chain order: types/config → core logic →
   callers → tests → docs. Not GitHub’s alphabetical order.
 - Skip or batch noise only after they confirm (lockfile churn, generated
@@ -272,7 +278,7 @@ checkout or for opening the local file.
 | **Links** | Queue context: files already covered and upcoming in the walk — complements Wiring (narrative order vs import graph). |
 | **Look closer** | 0–3 **named** functions/methods (or other hotspots) that are complex or novel, and are central to understanding this change. Each entry: **name + line range + why** (new protocol, dense control flow, non-obvious invariant, first of its kind here). On large files, line ranges are **required** — a bare name is not enough to find the spot. If none, say “none”. Not thin wrappers, re-exports, or routine CRUD. **Behavior pivots:** when the hunk is tiny but the whole point is a semantic choice (e.g. `isRefetching` vs `isFetching`, manual refresh flag vs query `isRefetching`), prefer a Look closer entry on that symbol — even a one-liner — with why the wrong alternative fails. Do not leave Look closer as “none” on those files. |
 | **Could have** | 0–2 **design forks** on this file only when there was a real choice (API shape, layer, library, sync vs async), and when the code or surrounding context gives evidence that this was an intentional design choice. One line each: plausible alternative + short tradeoff vs what they shipped. If the file is obvious or there's no fork, say “none”. Not a teach-back requirement — counterfactual review, not “you should have done X.” |
-| **Be careful** | 0–3 watch-outs: bugs, missing tests, risky edges, surprising coupling. Prioritize the highest-leverage risks implied by the code. If the overview named repo Watch for items, prefer those when this hunk actually hits that seam. Might be wrong. If none, say “none”. Do not invent. |
+| **Be careful** | 0–3 watch-outs: bugs, missing tests, risky edges, surprising coupling. Prioritize the highest-leverage risks implied by the code. If the overview named Watch for items or **group practices** from checkout docs, prefer those when this hunk hits that seam **or** when this file is a write/read that ought to follow them and does not (missing invalidate, key, TTL). Cite the practice. Might be wrong. If none, say “none”. Do not invent. |
 
 **Map** (optional under Look closer) — two shapes; use when useful, omit when not:
 
@@ -317,7 +323,8 @@ sections or extra teach-back questions. Put it where it belongs,
 only when this file actually has it:
 
 - **Overview / large-PR gate:** size, split-worthiness, generated noise;
-  repo kind + Watch for (docs or stack — not invented house law).
+  repo kind + Watch for (docs or stack — not invented house law) and
+  group practices harvested from those docs when the PR hits or skips the seam.
 - **Role in PR / Wiring:** where this file sits in the PR story and who
   imports whom among changed paths — before diving into hotspots.
 - **Look closer:** the behavioral contract (inputs, outputs, invariants,
@@ -517,7 +524,10 @@ confusion.
   rollout) as card sections or teach-back gates.
 - Do not invent repo-specific constraints that are not in docs or implied
   by the stack (mobile vs website vs backend). Kind-level Watch for items
-  are questions at the seam, not laws. Do not quiz teach-back on them.
+  are questions at the seam, not laws. Group practices are copied from
+  checkout docs (including heading-scoped bullets that never repeat the
+  keyword). Do not quiz teach-back on them — do put a fight or skip in
+  Be careful.
 - Do not post GitHub comments unless asked.
 - Do not submit a PR review (Approve / Comment / Request changes) as
   part of this walk. Viewed flags only, and only optionally.
